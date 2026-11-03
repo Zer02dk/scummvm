@@ -1,3 +1,7 @@
+> **This fork, branch `miljostrup`:** adds an engine for *Miljøstrup* (DOS, 1994).
+> How to build and run it: [engines/miljostrup/README.md](engines/miljostrup/README.md).
+> It is not part of ScummVM and won't be submitted there.
+
 # [ScummVM README](https://www.scummvm.org/) · [![Translation status](https://translations.scummvm.org/widgets/scummvm/-/scummvm/svg-badge.svg)](https://translations.scummvm.org/engage/scummvm/?utm_source=widget) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md#pull-requests)
 
 ## About ScummVM
