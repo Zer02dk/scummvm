@@ -99,6 +99,8 @@ public:
 	void startScript(SceneObject &obj, int event);
 	/** Stop a script (Scene_12d3) without its event. */
 	static void stopScript(SceneObject &obj);
+	/** Apply the requested animations at once (after the handlers' refresh). */
+	void settle();
 	/** Events posted since the last call. */
 	Common::Array<SceneEvent> takeEvents();
 

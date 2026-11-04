@@ -139,9 +139,13 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	_pending = false;
 	_textTimer = 0;
 	_verb = kVerbBrug;
-	// Each SCN object's handler sets its animation (method 1, attach -> refresh)
+	// Every hotspot's handler is attached and refreshed (method 1 -> 11):
+	// objects set their animation, cupboards show or hide their contents
 	for (uint i = 0; i < _scene.scn().objects.size(); i++)
 		refresh(_scene.scn().objects[i].hotspot.id);
+	for (uint i = 0; i < _scene.scn().hotspots.size(); i++)
+		refresh(_scene.scn().hotspots[i].id);
+	_scene.settle();
 	// Scene_17a4: the room's whole CMAP
 	g_system->getPaletteManager()->setPalette(_scene.palette(), 0, 256);
 	_screen->clear(0);

@@ -53,6 +53,27 @@ struct StateDef {
 	uint16 vmt;          // the handler's class
 };
 
+/**
+ * A thing (Situations_ThingInit 1222:180a): its description and pronoun
+ * (den / det / dem) as offsets in segment 1222, and its home, the id where it
+ * is put back (100 = nowhere). Look-only handlers (VMT DS:02e6) have a text
+ * and no pronoun. Lamps also have a target and a value (Lamp_Init).
+ */
+struct ThingDef {
+	int id;
+	uint16 descOff;
+	uint16 pronounOff;
+	int home;
+	int lampTarget;
+	int lampValue;
+};
+
+/** A cupboard's content (Situations_6cb6). */
+struct ChildDef {
+	int parent;
+	int child;
+};
+
 } // End of namespace Olga
 
 #endif // OLGA_STATES_H

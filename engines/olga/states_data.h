@@ -166,6 +166,45 @@ static const StateDef kStates[] = {
 	{ 231, 17, 0x21b9, 0x0455, 0x0, false, 0x0a9e },
 };
 
+// Things: id, description and pronoun (1222 offsets, 0 = none), home,
+// lamp target and value
+static const ThingDef kThings[] = {
+	{ 101, 0x00a5, 0x00c6, 172, 0, 0 },
+	{ 107, 0x6ec3, 0x6edc, 172, 127, 1 },
+	{ 110, 0x6ee0, 0x6edc, 172, 108, 1 },
+	{ 124, 0x6f21, 0x6edc, 172, 205, 1 },
+	{ 128, 0x6fea, 0x6edc, 172, 0, 0 },
+	{ 139, 0x6f45, 0x6f58, 100, 0, 0 },
+	{ 141, 0x6f7e, 0x6f7a, 143, 0, 0 },
+	{ 142, 0x6f5c, 0x6f7a, 143, 0, 0 },
+	{ 161, 0x6f9b, 0x0000, 0, 0, 0 },
+	{ 168, 0x702e, 0x6edc, 166, 0, 0 },
+	{ 169, 0x704c, 0x6f7a, 100, 0, 0 },
+	{ 187, 0x6fd4, 0x6edc, 172, 205, 2 },
+	{ 192, 0x7064, 0x6edc, 100, 0, 0 },
+	{ 197, 0x6efc, 0x6edc, 196, 0, 0 },
+	{ 203, 0x6fc0, 0x6edc, 172, 0, 0 },
+	{ 207, 0x7081, 0x0000, 0, 0, 0 },
+	{ 215, 0x7097, 0x0000, 0, 0, 0 },
+	{ 217, 0x70b5, 0x6edc, 100, 0, 0 },
+	{ 218, 0x70ce, 0x6edc, 100, 0, 0 },
+	{ 229, 0x7009, 0x6edc, 172, 0, 0 },
+};
+
+// Cupboards (Situations_6cb6): parent, child
+static const ChildDef kChildren[] = {
+	{ 111, 196 },
+	{ 111, 197 },
+	{ 163, 101 },
+	{ 163, 172 },
+	{ 163, 203 },
+	{ 163, 107 },
+	{ 163, 110 },
+	{ 163, 187 },
+	{ 163, 128 },
+	{ 163, 229 },
+};
+
 } // End of namespace Olga
 
 #endif // OLGA_STATES_DATA_H

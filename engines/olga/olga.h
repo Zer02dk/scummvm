@@ -139,6 +139,13 @@ private:
 	void sayExe(uint16 seg, uint16 off, byte color = 0xe, bool talk = true);
 	void clearText();
 	void verbBase(int verb);
+	/** Things (notes/verbs.md): Tag, Brug / Giv on the home, Se på. */
+	bool verbThing(int id, int verb, int other);
+	const ThingDef *thing(int id) const;
+	/** Thing_Refresh's "control off": carried (bit 0), or bit 0x100. */
+	bool hotspotOff(int id) const;
+	void addToInventory(int id);
+	void removeFromInventory(int id);
 	void verbDoor(int id, int verb);
 	void goThrough(int id);
 	bool isDoor(int id) const;

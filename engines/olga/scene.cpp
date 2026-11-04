@@ -72,8 +72,9 @@ bool Scene::load(const LocationDef &loc, int entry) {
 		o.image = s.image;
 		_objects.push_back(o);
 	}
-	// Section 2: the animated objects. Their handlers pick the animation
-	// (notes/situations.md); until those exist every object shows its first.
+	// Section 2: the animated objects. Their handlers pick the animation when
+	// they are attached (notes/situations.md); animation 1 is requested here
+	// and settle() applies the requests before the first frame.
 	for (uint i = 0; i < _scn.objects.size(); i++) {
 		SceneObject o;
 		o.animated = true;
@@ -82,7 +83,7 @@ bool Scene::load(const LocationDef &loc, int entry) {
 		o.y = o.def.y;
 		o.delay = o.def.delay;
 		o.last = o.def.start;
-		switchAnim(o, 1);
+		setAnim(o, 1);
 		_objects.push_back(o);
 	}
 	// Room_ReadPrs: Olga, at the entry's base position, animation 1 (standing);
@@ -98,7 +99,7 @@ bool Scene::load(const LocationDef &loc, int entry) {
 		o.delay = o.def.delay;
 		o.last = o.def.start;
 		o.frameBase = _room.size();
-		switchAnim(o, 1);
+		setAnim(o, 1);
 		_olga = _objects.size();
 		_objects.push_back(o);
 	}
@@ -189,6 +190,19 @@ void Scene::scriptStep(SceneObject &obj, int index) {
 		obj.hotDy += ny - obj.y;
 		obj.x = nx;
 		obj.y = ny;
+	}
+}
+
+void Scene::settle() {
+	// An object is not drawn before its first step selects an animation
+	// (Scene_SwitchAnim), so the room never shows the state before the
+	// handlers' refresh
+	for (uint i = 0; i < _objects.size(); i++) {
+		SceneObject &o = _objects[i];
+		if (o.animated && o.pending) {
+			switchAnim(o, o.pending);
+			o.pending = 0;
+		}
 	}
 }
 

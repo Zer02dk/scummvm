@@ -161,10 +161,95 @@ void OlgaEngine::runVerb() {
 		uint16 vmt = kStates[id - kFirstId].vmt;
 		if (isDoor(id) || vmt == kVmtPassage)
 			verbDoor(id, _verb);
-		else
+		else if (!verbThing(id, _verb, _obj2))
 			verbBase(_verb);
 	}
 	resetSentence();
+}
+
+const ThingDef *OlgaEngine::thing(int id) const {
+	for (uint i = 0; i < ARRAYSIZE(kThings); i++)
+		if (kThings[i].id == id)
+			return &kThings[i];
+	return nullptr;
+}
+
+bool OlgaEngine::hotspotOff(int id) const {
+	const ThingDef *t = thing(id);
+	return (_flags[id] & 0x100) || (t && t->pronounOff && (_flags[id] & 1));
+}
+
+void OlgaEngine::addToInventory(int id) {
+	// IntList_Add on DS:3ef0, then InvPanel_Redraw (1c51:0456): the last row
+	if (!carried(id))
+		_inventory.push_back(id);
+	int n = _inventory.size();
+	_inventoryRow = n < 6 ? 1 : (n - 1) / 5;
+	drawInventory();
+}
+
+void OlgaEngine::removeFromInventory(int id) {
+	for (uint i = 0; i < _inventory.size(); i++)
+		if (_inventory[i] == id)
+			_inventory.remove_at(i--);
+	int n = _inventory.size();
+	_inventoryRow = n < 6 ? 1 : (n - 1) / 5;
+	drawInventory();
+}
+
+bool OlgaEngine::verbThing(int id, int verb, int other) {
+	const ThingDef *t = thing(id);
+	if (!t)
+		return false;
+	if (!t->pronounOff) {
+		// Look-only handlers (VMT DS:02e6, 1222:007f): Se på says the text
+		if (verb != kVerbSePaa)
+			return false;
+		sayExe(kSegSituations, t->descOff);
+		return true;
+	}
+	Common::String pronoun = _exe.readString(kSegSituations, t->pronounOff);
+	switch (verb) {
+	case kVerbTag:
+		// Thing_Tag (1222:1a47): bit 0 = carried
+		if (_flags[id] & 1) {
+			say(_exe.readString(kSegSituations, 0x1a34) + pronoun + _exe.readString(kSegSituations, 0x1a3c));
+		} else {
+			_flags[id] |= 1;
+			refresh(id);
+			addToInventory(id);
+		}
+		return true;
+	case kVerbGiv:
+		// Thing_Giv (1222:19dc): to its home is the same as Brug
+		if (other != t->home)
+			return false;
+		// fall through
+	case kVerbBrug:
+		// Thing_Brug (1222:18b7): Brug X med its home puts it back
+		if (other != t->home)
+			return false;
+		if (_flags[id] & 1) {
+			_flags[id] &= ~1;
+			refresh(id);
+			removeFromInventory(id);
+		} else {
+			// The pronoun with a capital D; "Dem" becomes "De"
+			Common::String p = pronoun;
+			if (!p.empty())
+				p.setChar('D', 0);
+			if (p == _exe.readString(kSegSituations, 0x1899))
+				p = _exe.readString(kSegSituations, 0x189d);
+			say(p + _exe.readString(kSegSituations, 0x18a0));
+		}
+		return true;
+	case kVerbSePaa:
+		// Thing_SePaa (1222:1a0e): the description
+		sayExe(kSegSituations, t->descOff);
+		return true;
+	default:
+		return false;
+	}
 }
 
 void OlgaEngine::verbBase(int verb) {
@@ -182,13 +267,29 @@ void OlgaEngine::refresh(int id) {
 	// (1222:11b3), things 2 when carried (Thing_Refresh), the rest 1
 	if (id <= kNoObject || id > kLastId)
 		return;
+	// Situations_1281: a cupboard shows (clears bit 0x100) or hides its
+	// contents' hotspots as it is open or closed, and refreshes them
+	if (kStates[id - kFirstId].vmt == kVmtCupboard) {
+		bool shown = (_flags[id] & 0x101) == 1;
+		for (uint i = 0; i < ARRAYSIZE(kChildren); i++) {
+			if (kChildren[i].parent != id)
+				continue;
+			int c = kChildren[i].child;
+			if (shown)
+				_flags[c] &= ~0x100;
+			else
+				_flags[c] |= 0x100;
+			refresh(c);
+		}
+	}
 	SceneObject *o = _scene.findObject(id);
 	if (!o)
 		return;
+	const ThingDef *t = thing(id);
 	if (isDoor(id))
 		Scene::setAnim(*o, (_flags[id] & 1) + 1);
-	else if (kStates[id - kFirstId].icon)
-		Scene::setAnim(*o, carried(id) ? 2 : 1);
+	else if (t && t->pronounOff)
+		Scene::setAnim(*o, (_flags[id] & 1) ? 2 : 1); // Thing_Refresh
 	else
 		Scene::setAnim(*o, 1);
 }

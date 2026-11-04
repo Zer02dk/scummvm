@@ -82,6 +82,10 @@ void OlgaEngine::drawPanel() {
 	_screen->fillRect(Common::Rect(0, kPanelTop + 1, 320, 200), 7);
 	_screen->vLine(172, kPanelTop + 1, 199, 8);
 	_screen->vLine(173, kPanelTop + 1, 199, 15);
+	// and a dark frame (8) around each inventory slot (5427:1e92)
+	for (int r = 0; r < 2; r++)
+		for (int c = 0; c < 5; c++)
+			_screen->frameRect(slotRect(r, c), 8);
 	drawVerbs();
 	for (int i = 0; i < 2; i++)
 		drawButton(_arrowImages[i], kArrowPos[i].x, kArrowPos[i].y, false);
@@ -155,19 +159,23 @@ int OlgaEngine::hitTest(const Common::Point &p) {
 	for (int k = 0; k < 10; k++)
 		if (slotRect(k / 5, k % 5).contains(p))
 			return first + k <= (int)_inventory.size() ? _inventory[first + k - 1] : kNoObject;
-	// Room: the hotspots (inserted in SCN order, the last on top), each
-	// rectangle inclusive and moved by the room view's origin
+	// Room: the hotspots in SCN order, the first that contains the point
+	// wins: the things in a cupboard come before the shelf and the cupboard
+	// that contain them (GANG6: 101 .. 229, then 172, then 163), so the
+	// first inserted control must be on top (HYPOTHESIS: Gui's search order;
+	// it is the order that makes the cupboards work). Rectangles inclusive.
 	if (p.y < kRoomTop || p.y >= kRoomTop + kRoomHeight)
 		return kNoObject;
 	Common::Point rp(p.x, p.y - kRoomTop);
 	const ScnFile &scn = _scene.scn();
-	for (int i = (int)scn.hotspots.size() - 1; i >= -(int)scn.objects.size(); i--) {
+	int numObjects = scn.objects.size();
+	for (int i = 0; i < numObjects + (int)scn.hotspots.size(); i++) {
 		ScnHotspot h;
 		int dx = 0, dy = 0;
-		if (i >= 0) {
-			h = scn.hotspots[i];
+		if (i >= numObjects) {
+			h = scn.hotspots[i - numObjects];
 		} else {
-			h = scn.objects[-i - 1].hotspot;
+			h = scn.objects[i].hotspot;
 			SceneObject *o = _scene.findObject(h.id);
 			if (o) {
 				dx = o->hotDx;
@@ -176,9 +184,7 @@ int OlgaEngine::hitTest(const Common::Point &p) {
 		}
 		if (!h.enabled() || h.id < kFirstId || h.id > kLastId)
 			continue;
-		// The handler's refresh switches the control off: bit 0x100, or a
-		// carried thing (Thing_Refresh)
-		if ((_flags[h.id] & 0x100) || (kStates[h.id - kFirstId].icon && carried(h.id)))
+		if (hotspotOff(h.id))
 			continue;
 		if (rp.x >= h.x1 + dx && rp.x <= h.x2 + dx && rp.y >= h.y1 + dy && rp.y <= h.y2 + dy)
 			return h.id;
