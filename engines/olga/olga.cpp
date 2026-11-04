@@ -27,6 +27,7 @@
 #include "graphics/paletteman.h"
 
 #include "olga/console.h"
+#include "olga/locations_data.h"
 #include "olga/olga.h"
 
 namespace Olga {
@@ -85,18 +86,19 @@ void OlgaEngine::drawPanel() {
 	_screen->vLine(173, kPanelTop + 1, 199, 15);
 }
 
-bool OlgaEngine::showRoom(const Common::String &name) {
-	LbmFile lbm;
-	if (!lbm.load(Common::Path(name + ".LBM")) || !lbm.hasPalette())
+bool OlgaEngine::gotoLocation(int number, int entry) {
+	if (number < 1 || number > kNumLocations)
 		return false;
-	_room = lbm;
-	_roomName = name;
-	// Scene_17a4: the room's whole CMAP, then image 1 (the background)
-	g_system->getPaletteManager()->setPalette(_room.palette(), 0, 256);
+	const LocationDef &loc = kLocations[number - 1];
+	if (loc.kind != kLocRoom)
+		return false;
+	if (!_scene.load(loc, entry))
+		return false;
+	_location = number;
+	// Scene_17a4: the room's whole CMAP
+	g_system->getPaletteManager()->setPalette(_scene.palette(), 0, 256);
 	_screen->clear(0);
-	_screen->blitFrom(_room.image(1).surface, Common::Point(0, kRoomTop));
 	drawPanel();
-	_screen->update();
 	return true;
 }
 
@@ -112,15 +114,20 @@ Common::Error OlgaEngine::run() {
 	if (!shouldQuit() && showPicture("REKLAME.LBM"))
 		waitOrKey(6000);
 
-	// Main_NewGame: location 9 = GANG5 (notes/rooms.md)
-	if (!shouldQuit() && !showRoom("GANG5"))
+	// Main_NewGame: location 9 (GANG5), entry 3
+	if (!shouldQuit() && !gotoLocation(kStartLocation, kStartEntry))
 		return Common::kReadingFailed;
+	_roomView.create(kRoomWidth, kRoomHeight, Graphics::PixelFormat::createFormatCLUT8());
 
 	while (!shouldQuit()) {
 		uint32 start = g_system->getMillis();
 		Common::Event e;
 		while (g_system->getEventManager()->pollEvent(e)) {
 		}
+		// One frame of the room view's idle method (Room_021e)
+		_scene.tick();
+		_scene.draw(_roomView);
+		_screen->blitFrom(_roomView, Common::Point(0, kRoomTop));
 		_screen->update();
 		uint32 used = g_system->getMillis() - start;
 		if (used < kFrameMs)

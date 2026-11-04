@@ -33,12 +33,15 @@ Console::~Console() {
 
 bool Console::Cmd_room(int argc, const char **argv) {
 	if (argc < 2) {
-		debugPrintf("Showing %s\n", g_engine->getRoomName().c_str());
-		debugPrintf("Usage: room <LBM name without .LBM>, e.g. room klassen\n");
+		debugPrintf("Location %d\n", g_engine->getLocation());
+		debugPrintf("Usage: room <location 1..34> [entry]\n");
 		return true;
 	}
-	if (!g_engine->showRoom(argv[1]))
-		debugPrintf("Cannot show %s\n", argv[1]);
+	int entry = argc > 2 ? atoi(argv[2]) : 2;
+	if (!g_engine->gotoLocation(atoi(argv[1]), entry)) {
+		debugPrintf("Location %s is not a room\n", argv[1]);
+		return true;
+	}
 	return false;
 }
 

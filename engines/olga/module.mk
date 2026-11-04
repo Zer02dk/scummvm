@@ -4,7 +4,9 @@ MODULE_OBJS = \
 	console.o \
 	lbm.o \
 	metaengine.o \
-	olga.o
+	olga.o \
+	scene.o \
+	scn.o
 
 # This module can be built as a plugin
 ifeq ($(ENABLE_OLGA), DYNAMIC_PLUGIN)

@@ -90,7 +90,8 @@ bool LbmFile::readForm(const byte *data, uint32 start, uint32 end) {
 			bmhd.compression = body[10];
 			bmhd.key = READ_BE_UINT16(body + 12);
 			haveBmhd = true;
-		} else if (id == kCmap) {
+		} else if (id == kCmap && size > 0) {
+			// OLGA_L / OLGA_SS have a CMAP of size 0: no palette of their own
 			memset(_palette, 0, sizeof(_palette));
 			memcpy(_palette, body, MIN<uint32>(size, sizeof(_palette)));
 			_hasPalette = true;

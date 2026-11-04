@@ -1,0 +1,97 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef OLGA_SCENE_H
+#define OLGA_SCENE_H
+
+#include "common/array.h"
+#include "graphics/managed_surface.h"
+
+#include "olga/lbm.h"
+#include "olga/locations.h"
+#include "olga/scn.h"
+
+namespace Olga {
+
+enum {
+	kRoomWidth = 320,
+	kRoomHeight = 138
+};
+
+/**
+ * A sprite of the scene: a static sprite of the SCN, an animated object, or
+ * Olga. Objects follow the original's scene objects (unit Scene 1fab,
+ * notes/animation.md): a delay in frames, a requested animation that is
+ * switched to at the next step, step lists that loop.
+ */
+struct SceneObject {
+	bool animated = false;
+	int x = 0, y = 0;      // top-left, room coordinates, animation offset included
+	int bias = 0;          // depth bias: the static's, or the animation's p3
+	int image = 0;         // static sprites: the image number
+
+	ScnObject def;         // animated objects
+	int delay = 0;
+	int last = 0;          // frame of the last step
+	int anim = 0;          // current animation, 1-based, 0 = none yet
+	int pending = 0;       // Scene_SetAnim's request, 0 = none
+	uint stepPos = 0;      // index into the animation's steps
+	int frameBase = 0;     // added to frame numbers (Olga: her sprite file)
+
+	int currentImage() const;
+};
+
+class Scene {
+public:
+	/** Room_Init: the room's pictures, Olga's sprite file, the SCN and the PRS. */
+	bool load(const LocationDef &loc, int entry);
+
+	/** One frame of Scene_Tick (1fab:1aef). */
+	void tick();
+	/** Background and sprites sorted by depth (Scene_DrawAll). */
+	void draw(Graphics::ManagedSurface &dst) const;
+
+	const byte *palette() const { return _room.palette(); }
+	/** Image n of the combined list: the room's images, then Olga's. */
+	const LbmImage *image(int n) const;
+
+	/** Scene_SetAnim: switch to animation n at the object's next step. */
+	static void setAnim(SceneObject &obj, int n) { obj.pending = n; }
+
+	SceneObject *olga() { return _olga < 0 ? nullptr : &_objects[_olga]; }
+	const ScnFile &scn() const { return _scn; }
+
+private:
+	void switchAnim(SceneObject &obj, int n);
+	void step(SceneObject &obj);
+	int sortKey(const SceneObject &obj) const;
+
+	LbmFile _room;
+	LbmFile _sprites;
+	ScnFile _scn;
+	Common::Array<SceneObject> _objects;
+	int _olga = -1;
+	int _counter = 0; // frames, mod 1000
+};
+
+} // End of namespace Olga
+
+#endif // OLGA_SCENE_H

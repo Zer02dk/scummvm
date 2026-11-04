@@ -32,6 +32,8 @@
 
 #include "olga/detection.h"
 #include "olga/lbm.h"
+#include "olga/locations.h"
+#include "olga/scene.h"
 
 namespace Olga {
 
@@ -49,8 +51,9 @@ class OlgaEngine : public Engine {
 private:
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
-	LbmFile _room;
-	Common::String _roomName;
+	Scene _scene;
+	Graphics::ManagedSurface _roomView; // 320x138, drawn at y 8
+	int _location = 0;
 
 	/** Main_ShowPicture: a full-screen LBM with its palette, image 1 at 0,0. */
 	bool showPicture(const Common::Path &name);
@@ -79,9 +82,9 @@ public:
 		return f == kSupportsReturnToLauncher;
 	}
 
-	/** Show a room picture (name without .LBM) with the panel; for testing. */
-	bool showRoom(const Common::String &name);
-	const Common::String &getRoomName() const { return _roomName; }
+	/** Load a room location (1..34) with Olga at the given entry. */
+	bool gotoLocation(int number, int entry);
+	int getLocation() const { return _location; }
 };
 
 extern OlgaEngine *g_engine;
