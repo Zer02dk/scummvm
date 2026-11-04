@@ -109,25 +109,117 @@ bool Scene::load(const LocationDef &loc, int entry) {
 
 void Scene::switchAnim(SceneObject &obj, int n) {
 	// Scene_SwitchAnim + Scene_ApplyAnimOffset: leave the old animation's
-	// offset, take the new one's offset and depth bias, start at its first step
+	// offset, take the new one's offset and depth bias, start at its first
+	// step; the offset moves the move's start point too (Scene_0f62)
 	if (n < 1 || n > (int)obj.def.anims.size())
 		return;
+	int dx = 0, dy = 0;
 	if (obj.anim >= 1) {
 		const ScnAnim &old = obj.def.anims[obj.anim - 1];
-		obj.x -= old.dx;
-		obj.y -= old.dy;
+		dx -= old.dx;
+		dy -= old.dy;
 	}
 	const ScnAnim &a = obj.def.anims[n - 1];
+	dx += a.dx;
+	dy += a.dy;
 	obj.anim = n;
 	obj.stepPos = 0;
-	obj.x += a.dx;
-	obj.y += a.dy;
+	obj.x += dx;
+	obj.y += dy;
+	obj.startX += dx;
+	obj.startY += dy;
 	obj.bias = a.bias;
 }
 
+void Scene::startScript(SceneObject &obj, int event) {
+	// Scene_StartScript (1fab:1284): load the first move, or with no moves
+	// post the event at once
+	obj.event = event;
+	obj.moveIndex = 1;
+	obj.moving = !obj.moves.empty();
+	if (obj.moving)
+		loadMove(obj);
+	else if (event != 2)
+		_events.push_back({ event, (int)(&obj - _objects.begin()) });
+}
+
+void Scene::stopScript(SceneObject &obj) {
+	obj.moves.clear();
+	obj.moving = false;
+	obj.stepsLeft = 0;
+}
+
+void Scene::loadMove(SceneObject &obj) {
+	// Scene_LoadMove (1fab:12e3): the move's animation is requested, it starts
+	// from the object's present place
+	obj.cur = obj.moves[obj.moveIndex - 1];
+	obj.stepsLeft = obj.cur.steps;
+	setAnim(obj, obj.cur.anim);
+	obj.startX = obj.x;
+	obj.startY = obj.y;
+}
+
+static int roundDiv(int a, int b) {
+	// Scene_RoundDiv (1fab:1075), with Pascal's truncating div and mod
+	return a / b + ((a % b > b / 2) ? 1 : 0);
+}
+
+void Scene::scriptStep(SceneObject &obj, int index) {
+	// Scene_ScriptStep (1fab:11a8): when a move is used up, the next one, or
+	// after the last the event (1e9c:0111); while moving, Scene_MoveStep puts
+	// the object at start + RoundDiv(d * done, steps)
+	if (obj.stepsLeft == 0) {
+		if (obj.moveIndex < obj.moves.size()) {
+			obj.moveIndex++;
+			loadMove(obj);
+		} else {
+			obj.moving = false;
+			obj.moves.clear();
+			if (obj.event != 2)
+				_events.push_back({ obj.event, index });
+			return;
+		}
+	}
+	if (obj.stepsLeft > 0 && obj.cur.steps > 0) {
+		obj.stepsLeft--;
+		int done = obj.cur.steps - obj.stepsLeft;
+		int nx = obj.startX + roundDiv(obj.cur.dx * done, obj.cur.steps);
+		int ny = obj.startY + roundDiv(obj.cur.dy * done, obj.cur.steps);
+		obj.hotDx += nx - obj.x;
+		obj.hotDy += ny - obj.y;
+		obj.x = nx;
+		obj.y = ny;
+	}
+}
+
+Common::Array<SceneEvent> Scene::takeEvents() {
+	Common::Array<SceneEvent> e = _events;
+	_events.clear();
+	return e;
+}
+
+int Scene::imageWidth(const SceneObject &obj) const {
+	const LbmImage *img = image(obj.currentImage());
+	return img ? img->surface.w : 0;
+}
+
+Common::Point Scene::feet(const SceneObject &obj) const {
+	return Common::Point(obj.x + imageWidth(obj) / 2, sortKey(obj));
+}
+
+SceneObject *Scene::findObject(int hotspotId) {
+	for (uint i = 0; i < _objects.size(); i++)
+		if (_objects[i].animated && (int)i != _olga && _objects[i].def.hotspot.id == hotspotId)
+			return &_objects[i];
+	return nullptr;
+}
+
 void Scene::step(SceneObject &obj) {
-	// Scene_Step (1fab:0d2f): a requested, different animation is switched
-	// to; otherwise the step position advances and wraps (Scene_AdvanceStep)
+	// Scene_Step (1fab:0d2f): first the script's move, then the animation:
+	// a requested, different animation is switched to; otherwise the step
+	// position advances and wraps (Scene_AdvanceStep)
+	if (obj.moving)
+		scriptStep(obj, &obj - _objects.begin());
 	if (obj.pending) {
 		int n = obj.pending;
 		obj.pending = 0;

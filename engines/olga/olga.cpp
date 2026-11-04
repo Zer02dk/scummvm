@@ -24,11 +24,13 @@
 #include "common/events.h"
 #include "common/system.h"
 #include "engines/util.h"
+#include "graphics/cursorman.h"
 #include "graphics/paletteman.h"
 
 #include "olga/console.h"
 #include "olga/locations_data.h"
 #include "olga/olga.h"
+#include "olga/states_data.h"
 
 namespace Olga {
 
@@ -37,6 +39,13 @@ OlgaEngine *g_engine;
 OlgaEngine::OlgaEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("Olga") {
 	g_engine = this;
+	// ObjNames_InitStates (21b9:045a): the state at a new game
+	memset(_flags, 0, sizeof(_flags));
+	for (uint i = 0; i < ARRAYSIZE(kStates); i++)
+		_flags[kStates[i].id] = kStates[i].flags;
+	for (int n = 0; n < kNumLocations; n++)
+		for (int e = 0; e < kMaxEntries; e++)
+			_entries[n][e] = { kLocations[n].entries[e].x, kLocations[n].entries[e].y };
 }
 
 OlgaEngine::~OlgaEngine() {
@@ -49,6 +58,44 @@ uint32 OlgaEngine::getFeatures() const {
 
 Common::String OlgaEngine::getGameId() const {
 	return _gameDescription->gameId;
+}
+
+bool OlgaEngine::loadExeData() {
+	if (!_exe.open() || !_font.loadPatch(_exe))
+		return false;
+	// Verb buttons: 51x9 images at 19c0:0f84 + 0x1d1 * k (Responses_MakeVerbButtons)
+	for (int k = 0; k < kNumVerbs; k++)
+		if (!_exe.readBitmap(0x19c0, 0x0f84 + 0x1d1 * k, _verbImages[k]))
+			return false;
+	// Inventory arrows (InvPanel_Init) and the 17 icons of 23x18 (unit Icons)
+	if (!_exe.readBitmap(0x1c51, 0x0507, _arrowImages[0]) || !_exe.readBitmap(0x1c51, 0x059d, _arrowImages[1]))
+		return false;
+	for (int n = 1; n <= 17; n++)
+		if (!_exe.readBitmap(0x22d2, 0x0131 + 0x1a4 * (n - 1), _icons[n]))
+			return false;
+	return true;
+}
+
+void OlgaEngine::setCursor(uint16 maskOff) {
+	// Gui_1156 copies the 16 AND words and 16 XOR words, Gui_10a5 draws them
+	// per pixel (bit 15 = left): AND 0 -> colour 0; XOR 1 -> 15 (or the
+	// inverted screen pixel where AND is 1, which these masks do not use);
+	// AND 1 and XOR 0 -> transparent. The hot spot is the top-left corner.
+	const byte kTransparent = 1;
+	const byte *p = _exe.data(kSegData, maskOff, 64);
+	if (!p)
+		return;
+	byte buf[16 * 16];
+	for (int y = 0; y < 16; y++) {
+		uint16 andMask = READ_LE_UINT16(p + 2 * y);
+		uint16 xorMask = READ_LE_UINT16(p + 32 + 2 * y);
+		for (int x = 0; x < 16; x++) {
+			bool a = andMask & (0x8000 >> x), b = xorMask & (0x8000 >> x);
+			buf[y * 16 + x] = b ? 15 : (a ? kTransparent : 0);
+		}
+	}
+	CursorMan.replaceCursor(buf, 16, 16, 0, 0, kTransparent);
+	CursorMan.showMouse(true);
 }
 
 void OlgaEngine::waitOrKey(uint32 ms) {
@@ -75,57 +122,99 @@ bool OlgaEngine::showPicture(const Common::Path &name) {
 	return true;
 }
 
-void OlgaEngine::drawPanel() {
-	// Responses_1e0d (5427:1e0d): message and sentence lines black, a white
-	// line at y 156, the panel grey (7) with the divider at x 172 / 173
-	_screen->fillRect(Common::Rect(0, 0, 320, kRoomTop), 0);
-	_screen->fillRect(Common::Rect(0, kSentenceTop, 320, kPanelTop), 0);
-	_screen->hLine(0, kPanelTop, 319, 15);
-	_screen->fillRect(Common::Rect(0, kPanelTop + 1, 320, 200), 7);
-	_screen->vLine(172, kPanelTop + 1, 199, 8);
-	_screen->vLine(173, kPanelTop + 1, 199, 15);
-}
-
 bool OlgaEngine::gotoLocation(int number, int entry) {
 	if (number < 1 || number > kNumLocations)
 		return false;
-	const LocationDef &loc = kLocations[number - 1];
+	LocationDef loc = kLocations[number - 1];
 	if (loc.kind != kLocRoom)
 		return false;
+	for (int e = 0; e < kMaxEntries; e++) {
+		loc.entries[e].x = _entries[number - 1][e].x;
+		loc.entries[e].y = _entries[number - 1][e].y;
+	}
 	if (!_scene.load(loc, entry))
 		return false;
 	_location = number;
+	_nextLocation = 0;
+	_pending = false;
+	_textTimer = 0;
+	_verb = kVerbBrug;
+	// Each SCN object's handler sets its animation (method 1, attach -> refresh)
+	for (uint i = 0; i < _scene.scn().objects.size(); i++)
+		refresh(_scene.scn().objects[i].hotspot.id);
 	// Scene_17a4: the room's whole CMAP
 	g_system->getPaletteManager()->setPalette(_scene.palette(), 0, 256);
 	_screen->clear(0);
 	drawPanel();
+	resetSentence();
 	return true;
+}
+
+void OlgaEngine::leaveRoom() {
+	// RoomLoc_Run (1000:02c6): Olga's place, without her animation offset,
+	// becomes entry 1 of the room she leaves
+	SceneObject *olga = _scene.olga();
+	if (olga && olga->anim >= 1) {
+		const ScnAnim &a = olga->def.anims[olga->anim - 1];
+		_entries[_location - 1][0] = { (int16)(olga->x - a.dx), (int16)(olga->y - a.dy) };
+	}
+	int loc = _nextLocation, entry = _nextEntry;
+	_nextLocation = 0;
+	if (!gotoLocation(loc, entry))
+		warning("Olga: location %d is not implemented yet", loc);
 }
 
 Common::Error OlgaEngine::run() {
 	initGraphics(320, 200);
 	_screen = new Graphics::Screen();
 	setDebugger(new Console());
+	if (!loadExeData())
+		return Common::kReadingFailed;
 
-	// Main_Body: two title pictures of 6 s each (1000:198b, 1000:1994)
+	// Main_Body: the hourglass, two title pictures of 6 s each (1000:198b,
+	// 1000:1994)
+	setCursor(0x138e);
 	if (!showPicture("OLGA.LBM"))
 		return Common::kReadingFailed;
 	waitOrKey(6000);
 	if (!shouldQuit() && showPicture("REKLAME.LBM"))
 		waitOrKey(6000);
 
+	// The room view is enabled: the arrow (App_02e9)
+	setCursor(0x134e);
+
 	// Main_NewGame: location 9 (GANG5), entry 3
+	_roomView.create(kRoomWidth, kRoomHeight, Graphics::PixelFormat::createFormatCLUT8());
 	if (!shouldQuit() && !gotoLocation(kStartLocation, kStartEntry))
 		return Common::kReadingFailed;
-	_roomView.create(kRoomWidth, kRoomHeight, Graphics::PixelFormat::createFormatCLUT8());
 
 	while (!shouldQuit()) {
 		uint32 start = g_system->getMillis();
 		Common::Event e;
 		while (g_system->getEventManager()->pollEvent(e)) {
+			switch (e.type) {
+			case Common::EVENT_MOUSEMOVE:
+				onHover(e.mouse);
+				break;
+			case Common::EVENT_LBUTTONDOWN:
+				onClick(e.mouse);
+				break;
+			case Common::EVENT_KEYDOWN:
+				onKey(e.kbd);
+				break;
+			default:
+				break;
+			}
 		}
 		// One frame of the room view's idle method (Room_021e)
+		if (_textTimer > 0 && --_textTimer == 0)
+			clearText();
 		_scene.tick();
+		Common::Array<SceneEvent> events = _scene.takeEvents();
+		for (uint i = 0; i < events.size(); i++)
+			handleEvent(events[i]);
+		if (_nextLocation)
+			leaveRoom();
 		_scene.draw(_roomView);
 		_screen->blitFrom(_roomView, Common::Point(0, kRoomTop));
 		_screen->update();

@@ -2,11 +2,16 @@ MODULE := engines/olga
 
 MODULE_OBJS = \
 	console.o \
+	exe.o \
+	font.o \
+	interface.o \
 	lbm.o \
 	metaengine.o \
 	olga.o \
+	room.o \
 	scene.o \
-	scn.o
+	scn.o \
+	walk.o
 
 # This module can be built as a plugin
 ifeq ($(ENABLE_OLGA), DYNAMIC_PLUGIN)

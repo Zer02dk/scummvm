@@ -22,7 +22,9 @@
 #ifndef OLGA_H
 #define OLGA_H
 
+#include "common/array.h"
 #include "common/error.h"
+#include "common/keyboard.h"
 #include "common/random.h"
 #include "common/scummsys.h"
 #include "common/str.h"
@@ -31,17 +33,40 @@
 #include "graphics/screen.h"
 
 #include "olga/detection.h"
+#include "olga/exe.h"
+#include "olga/font.h"
 #include "olga/lbm.h"
 #include "olga/locations.h"
 #include "olga/scene.h"
+#include "olga/states.h"
 
 namespace Olga {
 
 // Screen layout of a room (notes/interface.md)
 enum {
 	kRoomTop = 8,          // the 320x138 background is drawn at y 8
-	kSentenceTop = 146,    // sentence line 146..155
+	kSentenceTop = 146,    // sentence line 146..155, text at y 147
 	kPanelTop = 156        // verbs and inventory below
+};
+
+// The commands of the verb buttons (Responses_MakeVerbButtons), in button order
+enum Verb {
+	kVerbSkub = 0x32,
+	kVerbTraek,
+	kVerbBrug,
+	kVerbTag,
+	kVerbGiv,
+	kVerbSePaa,
+	kVerbAaben,
+	kVerbLuk,
+	kVerbTalTil,
+	kNumVerbs = 9
+};
+
+enum {
+	kCmdInvUp = 0x3b,      // inventory arrows (InvPanel_Init)
+	kCmdInvDown = 0x3c,
+	kEventArrived = 3      // Olga's walk ended: run the pending verb
 };
 
 // One frame of the original's loop: 4 ticks of its 100 Hz timer
@@ -51,16 +76,77 @@ class OlgaEngine : public Engine {
 private:
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
+	ExeFile _exe;
+	GameFont _font;
 	Scene _scene;
 	Graphics::ManagedSurface _roomView; // 320x138, drawn at y 8
 	int _location = 0;
+	int _nextLocation = 0, _nextEntry = 0; // Room_SetExit
+	struct Entry { int16 x, y; };
+	Entry _entries[kNumLocations][kMaxEntries]; // entry 1 is overwritten on leaving
+
+	// Game state: the records' flags (DS:1ca1) and the inventory (DS:3ef0)
+	uint32 _flags[kLastId + 1];
+	Common::Array<int> _inventory;
+	int _inventoryRow = 1;  // InvPanel +0x1df
+
+	// The sentence (room view +0xcad..+0xcb5)
+	int _verb = kVerbBrug;  // Main_02c6 passes 0x34
+	int _stage = 1;
+	int _obj1 = kNoObject, _obj2 = kNoObject;
+	bool _pending = false;  // walking to the object, verb runs on arrival
+
+	// Message line (Room_Say)
+	int _textTimer = 0;
+	int _textSpeed = 6;     // DS:27a4, frames per character (SkiftTid)
+
+	// Images built into OLGA.EXE
+	LbmImage _verbImages[kNumVerbs];
+	LbmImage _arrowImages[2];
+	LbmImage _icons[18];    // 1..17
 
 	/** Main_ShowPicture: a full-screen LBM with its palette, image 1 at 0,0. */
 	bool showPicture(const Common::Path &name);
 	/** KeyWait_WaitMsOrKey: wait ms milliseconds or until a key (or click). */
 	void waitOrKey(uint32 ms);
-	/** Responses_1e0d: the empty interface panel. */
+	bool loadExeData();
+	/**
+	 * Gui_1156: one of the game's two 16x16 cursors, an AND / XOR mask pair
+	 * in the data segment (DS:134e arrow, DS:138e hourglass).
+	 */
+	void setCursor(uint16 maskOff);
+
+	// Interface (interface.cpp)
 	void drawPanel();
+	void drawButton(const LbmImage &img, int x, int y, bool pressed);
+	void drawVerbs();
+	void drawInventory();
+	void drawSentence(bool running);
+	/** The command under the mouse: a hotspot or item id, a button, or 100. */
+	int hitTest(const Common::Point &p);
+	void onHover(const Common::Point &p);
+	void onClick(const Common::Point &p);
+	void onKey(const Common::KeyState &ks);
+	void selectVerb(int verb);
+
+	// Room logic (room.cpp)
+	void resetSentence();
+	void startVerb();
+	void runVerb();
+	void cancelWalk();
+	void handleEvent(const SceneEvent &e);
+	void say(const Common::String &text, byte color = 0xe, bool talk = true);
+	void sayExe(uint16 seg, uint16 off, byte color = 0xe, bool talk = true);
+	void clearText();
+	void verbBase(int verb);
+	void verbDoor(int id, int verb);
+	void goThrough(int id);
+	bool isDoor(int id) const;
+	void refresh(int id);
+	void setExit(int location, int entry) { _nextLocation = location; _nextEntry = entry; }
+	void leaveRoom();
+	Common::String objectName(int id) const;
+	bool carried(int id) const;
 
 protected:
 	Common::Error run() override;

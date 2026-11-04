@@ -56,7 +56,27 @@ struct SceneObject {
 	uint stepPos = 0;      // index into the animation's steps
 	int frameBase = 0;     // added to frame numbers (Olga: her sprite file)
 
+	// Script (Scene_AddMove ... Scene_MoveStep): a list of moves, the event
+	// posted to the room when the list is done
+	struct Move {
+		int dx, dy, anim, steps;
+	};
+	Common::Array<Move> moves;
+	bool moving = false;   // +0x12c0
+	uint moveIndex = 0;    // +0x131f, 1-based
+	Move cur = { 0, 0, 0, 0 };
+	int stepsLeft = 0;     // +0x131d
+	int startX = 0, startY = 0; // +0x1321 / +0x1323
+	int event = 2;         // +0x1329; 2 = none
+	int hotDx = 0, hotDy = 0; // the hotspot moves with the object's moves (1e9c:0167)
+
 	int currentImage() const;
+};
+
+/** A room event posted by an object's finished script (Responses_RoomEvent). */
+struct SceneEvent {
+	int code;
+	int object;
 };
 
 class Scene {
@@ -75,13 +95,28 @@ public:
 
 	/** Scene_SetAnim: switch to animation n at the object's next step. */
 	static void setAnim(SceneObject &obj, int n) { obj.pending = n; }
+	/** Scene_StartScript: run the object's moves; event when they are done. */
+	void startScript(SceneObject &obj, int event);
+	/** Stop a script (Scene_12d3) without its event. */
+	static void stopScript(SceneObject &obj);
+	/** Events posted since the last call. */
+	Common::Array<SceneEvent> takeEvents();
+
+	/** Olga's feet: centre x and the sort key (Responses_1a4d). */
+	Common::Point feet(const SceneObject &obj) const;
+	int imageWidth(const SceneObject &obj) const;
 
 	SceneObject *olga() { return _olga < 0 ? nullptr : &_objects[_olga]; }
+	int olgaIndex() const { return _olga; }
+	/** The SCN object whose hotspot has this id, or nullptr. */
+	SceneObject *findObject(int hotspotId);
 	const ScnFile &scn() const { return _scn; }
 
 private:
 	void switchAnim(SceneObject &obj, int n);
 	void step(SceneObject &obj);
+	void loadMove(SceneObject &obj);
+	void scriptStep(SceneObject &obj, int index);
 	int sortKey(const SceneObject &obj) const;
 
 	LbmFile _room;
@@ -90,6 +125,7 @@ private:
 	Common::Array<SceneObject> _objects;
 	int _olga = -1;
 	int _counter = 0; // frames, mod 1000
+	Common::Array<SceneEvent> _events;
 };
 
 } // End of namespace Olga
