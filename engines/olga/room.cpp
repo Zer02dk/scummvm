@@ -196,8 +196,10 @@ const ThingDef *OlgaEngine::thing(int id) const {
 
 bool OlgaEngine::hotspotOff(int id) const {
 	const ThingDef *t = thing(id);
-	// Lars with the group (1222:2a91 switches his control off)
-	if (id == 164 && (_flags[id] & 2))
+	// Controls the refreshes switch off: Lars with the group (1222:2a91),
+	// the bag boy in the classroom (26fb), the lifters done (4b48)
+	if ((id == 164 && (_flags[id] & 2)) || (id == 186 && (_flags[id] & 2)) ||
+		(id == 188 && (_flags[id] & 3) == 1))
 		return true;
 	return (_flags[id] & 0x100) || (t && t->pronounOff && (_flags[id] & 1));
 }

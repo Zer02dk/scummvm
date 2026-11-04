@@ -56,13 +56,21 @@ enum {
 	// GANG6 / HKOEKKEN: poison and salmiak
 	kVmtPoison = 0x0bee, kVmtSalmiak = 0x086a,
 	// GAARD
-	kVmtLars = 0x06aa, kVmtGroup = 0x06e2
+	kVmtLars = 0x06aa, kVmtGroup = 0x06e2,
+	// GANG1 / KOEKKEN
+	kVmtBagBoy = 0x0672, kVmtLifters = 0x0b0e, kVmtTrolley = 0x09f6
+};
+
+enum {
+	kIdBagBoy = 186, kIdLifters = 188, kIdTrolley = 167,
+	kIdClassDoor = 112, kIdKitchenDoorSchool = 123
 };
 
 // Room events (Responses_RoomEvent 5427:1454)
 enum {
 	kEventDevilGone = 4, kEventDevilTalk = 5, kEventDevilLaugh = 6,
-	kEventLarsAtGroup = 8, kEventPraiseDone = 9, kEventLarsWalks = 0xc,
+	kEventBagBoyIn = 7, kEventLarsAtGroup = 8, kEventPraiseDone = 9,
+	kEventLarsWalks = 0xc, kEventLiftingDone = 0xd,
 	kEventOwnerShouts = 0x10, kEventPolice = 0x11
 };
 
@@ -182,6 +190,55 @@ bool OlgaEngine::refreshSituation(int id, SceneObject &o) {
 		Scene::setAnim(o, f ? 2 : 1);
 		_names[id] = _exe.readString(kSeg, f ? 0x1d9d : 0x1d94);
 		return true;
+	case kVmtBagBoy:
+		// 1222:26fb: the TASKVALG answer (bit 2) makes him walk into the
+		// classroom (stand 8, 105 px right in 15 steps, stand 8; event 7);
+		// in (bit 1): animation 3, hotspot off; else 1, or 2 with bit 0
+		if (f & 4) {
+			_flags[id] &= ~4;
+			Scene::stopScript(o);
+			o.moves.push_back(move(4, 8));
+			SceneObject::Move walk = { 0x69, 0, 2, 0xf };
+			o.moves.push_back(walk);
+			o.moves.push_back(move(4, 8));
+			_scene.startScript(o, kEventBagBoyIn);
+			setInput(false);
+		} else if (f & 2) {
+			Scene::setAnim(o, 3);
+		} else {
+			Scene::setAnim(o, (f & 1) + 1);
+		}
+		return true;
+	case kVmtLifters: {
+		// 1222:4b48: the LOEFT answer: 2 carry it (animation 2), 3 with the
+		// trolley 167 (animation 3); both 138 px in 46 steps, then state 1
+		// and event 0xd. State 1: animation 4, hotspot off
+		int s = f & 3;
+		if (s == 0) {
+			Scene::setAnim(o, 1);
+		} else if (s == 1) {
+			Scene::setAnim(o, 4);
+		} else {
+			_flags[id] = 1;
+			Scene::stopScript(o);
+			SceneObject::Move carry = { 0x8a, 0, s == 2 ? 2 : 3, 0x2e };
+			o.moves.push_back(carry);
+			_scene.startScript(o, kEventLiftingDone);
+			SceneObject *trolley = s == 3 ? _scene.findObject(kIdTrolley) : nullptr;
+			if (trolley) {
+				Scene::stopScript(*trolley);
+				SceneObject::Move roll = { 0x8a, 0, 2, 0x2e };
+				trolley->moves.push_back(roll);
+				_scene.startScript(*trolley, 2);
+			}
+			setInput(false);
+		}
+		return true;
+	}
+	case kVmtTrolley:
+		// 1222:3eea
+		Scene::setAnim(o, (f & ~0x100) + 1);
+		return true;
 	case kVmtLars:
 		// 1222:2a91: with the group (bit 1): animation 3, his hotspot off;
 		// taken (bit 0): he starts to walk (event 0xc), the room waits
@@ -248,6 +305,25 @@ void OlgaEngine::situationEvent(const SceneEvent &e) {
 		if (olga)
 			Scene::setAnim(*olga, 1);
 		setInput(true);
+		break;
+	case kEventBagBoyIn:
+		// Responses_0e08: the boy is in (bit 1), the classroom door 112
+		// toggles, input back
+		_flags[kIdBagBoy] |= 2;
+		refresh(kIdBagBoy);
+		_flags[kIdClassDoor] ^= 1;
+		refresh(kIdClassDoor);
+		setInput(true);
+		break;
+	case kEventLiftingDone:
+		// Responses_1123: the trolley's bit 0 off, the kitchen door 123
+		// toggles, praise
+		refresh(kIdLifters);
+		_flags[kIdTrolley] &= ~1;
+		refresh(kIdTrolley);
+		_flags[kIdKitchenDoorSchool] ^= 1;
+		refresh(kIdKitchenDoorSchool);
+		showPraise();
 		break;
 	case kEventLarsWalks: {
 		// Responses_107b: Lars walks 168 pixels right in 56 steps
@@ -618,6 +694,28 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 		} else {
 			return false;
 		}
+		return true;
+	case kVmtBagBoy:
+		// Brug / Giv: the TASKVALG pop-up (1222:26a6 -> 26c0); 264a / 2684
+		if (verb == kVerbBrug || verb == kVerbGiv)
+			setExit(24, 1);
+		else if (verb == kVerbSePaa)
+			sayExe(kSeg, 0x2625);
+		else if (verb == kVerbTalTil)
+			sayExe(kSeg, 0x266c, 0x2, false);
+		else
+			return false;
+		return true;
+	case kVmtLifters:
+		// Brug / Giv: the LOEFT pop-up (1222:4993, 49c3); 4930 / 4971
+		if (verb == kVerbBrug || verb == kVerbGiv)
+			setExit(28, 7);
+		else if (verb == kVerbSePaa)
+			sayExe(kSeg, 0x4911);
+		else if (verb == kVerbTalTil)
+			sayExe(kSeg, 0x4952, 0xc, false);
+		else
+			return false;
 		return true;
 	case kVmtGroup:
 		// 1222:2c28 / 2cb4
