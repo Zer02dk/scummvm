@@ -170,6 +170,14 @@ void OlgaEngine::leaveRoom() {
 	}
 	int loc = _nextLocation, entry = _nextEntry;
 	_nextLocation = 0;
+	if (loc >= 100) {
+		// Main_ShowEnding (1000:1a84): 100 = politi.lbm (101, faerdig.lbm,
+		// is never reached), 32 s or a key, then the game ends
+		if (showPicture(loc == 100 ? "POLITI.LBM" : "FAERDIG.LBM"))
+			waitOrKey(32000);
+		quitGame();
+		return;
+	}
 	if (!gotoLocation(loc, entry))
 		warning("Olga: location %d is not implemented yet", loc);
 }

@@ -37,20 +37,40 @@ const uint16 kSegResponses = 0x5427; // overlay unit Responses
 enum {
 	kIdWindow = 102, kIdRadiator = 103, kIdBoy = 104, kIdCeilingLamp = 106,
 	kIdBlackboard = 108, kIdSkylight = 124, kIdDevil = 134, kIdPraise = 190,
-	kIdGirl = 205
+	kIdGirl = 205,
+	kIdPicture = 139, kIdWall = 140, kIdMarkers = 204, kIdFormGirl = 202,
+	kIdCrayons = 142, kIdDog = 133, kIdPaperBoy = 171, kIdOwner = 206,
+	kIdSister = 174, kIdSisterGarage = 209, kIdLars = 164, kIdGroup = 165,
+	kIdFarvehDoor = 162, kIdSink = 207, kIdKitchenDoor = 193
 };
 
 // Handler classes (VMTs, tools/situations.py)
 enum {
 	kVmtWindow = 0x0356, kVmtRadiator = 0x0442, kVmtBoy = 0x031e,
 	kVmtCeilingLamp = 0x0a9e, kVmtBlackboard = 0x0986, kVmtGirl = 0x09be,
-	kVmtLamp = 0x0ad6, kVmtDevil = 0x047a, kVmtPraise = 0x04b2
+	kVmtLamp = 0x0ad6, kVmtDevil = 0x047a, kVmtPraise = 0x04b2,
+	// FORMNING
+	kVmtFormWindow = 0x0a2e, kVmtKids = 0x0a66, kVmtFormGirl = 0x0832,
+	kVmtMarkers = 0x094e, kVmtMarkerThing = 0x08de, kVmtGasMask = 0x0916,
+	kVmtPicture = 0x0522, kVmtWall = 0x055a,
+	// GANG6 / HKOEKKEN: poison and salmiak
+	kVmtPoison = 0x0bee, kVmtSalmiak = 0x086a,
+	// GAARD
+	kVmtLars = 0x06aa, kVmtGroup = 0x06e2
 };
 
 // Room events (Responses_RoomEvent 5427:1454)
 enum {
-	kEventDevilGone = 4, kEventDevilTalk = 5, kEventDevilLaugh = 6, kEventPraiseDone = 9
+	kEventDevilGone = 4, kEventDevilTalk = 5, kEventDevilLaugh = 6,
+	kEventLarsAtGroup = 8, kEventPraiseDone = 9, kEventLarsWalks = 0xc,
+	kEventOwnerShouts = 0x10, kEventPolice = 0x11
 };
+
+// Brug gift / salmiak med these is the right disposal (set 1222:3853);
+// Giv also counts the sink (set 1222:38ab)
+bool isDisposal(int id) {
+	return id == 161 || id == kIdFarvehDoor || id == 197;
+}
 
 SceneObject::Move move(int anim, int steps) {
 	SceneObject::Move m = { 0, 0, anim, steps };
@@ -143,6 +163,41 @@ bool OlgaEngine::refreshSituation(int id, SceneObject &o) {
 		// 1222:4184: good light 3, the headlamp 2, too dark 1
 		Scene::setAnim(o, (f & 1) ? 3 : (f & 2) ? 2 : 1);
 		return true;
+	case kVmtFormWindow:
+	case kVmtKids:
+		// 1222:091f / 4561
+		Scene::setAnim(o, (f & 1) + 1);
+		return true;
+	case kVmtFormGirl:
+		// 1222:351d: cold 1, markers swapped 3, gas mask 4, the spirit markers 2
+		Scene::setAnim(o, (f & 1) ? 1 : (f & 4) ? 3 : (f & 2) ? 4 : 2);
+		return true;
+	case kVmtMarkers:
+		// 1222:3d0b: animation state + 1, and the name follows what lies there
+		Scene::setAnim(o, f + 1);
+		_names[id] = _exe.readString(kSeg, f == 1 ? 0x3cfd : 0x3cf5);
+		return true;
+	case kVmtWall:
+		// 1222:1da5: the ugly wall, or Olga's picture on it (renamed)
+		Scene::setAnim(o, f ? 2 : 1);
+		_names[id] = _exe.readString(kSeg, f ? 0x1d9d : 0x1d94);
+		return true;
+	case kVmtLars:
+		// 1222:2a91: with the group (bit 1): animation 3, his hotspot off;
+		// taken (bit 0): he starts to walk (event 0xc), the room waits
+		if (f & 2) {
+			Scene::setAnim(o, 3); // the hotspot: OlgaEngine::hotspotOff
+		} else if (!(f & 1)) {
+			Scene::setAnim(o, 1);
+		} else {
+			if (olga)
+				Scene::setAnim(*olga, 1);
+			Scene::stopScript(o);
+			o.moves.push_back(move(1, 0));
+			_scene.startScript(o, kEventLarsWalks);
+			setInput(false);
+		}
+		return true;
 	default:
 		return false;
 	}
@@ -193,6 +248,57 @@ void OlgaEngine::situationEvent(const SceneEvent &e) {
 		if (olga)
 			Scene::setAnim(*olga, 1);
 		setInput(true);
+		break;
+	case kEventLarsWalks: {
+		// Responses_107b: Lars walks 168 pixels right in 56 steps
+		// (animation 2), then event 8; Olga points (animation 9)
+		SceneObject *lars = _scene.findObject(kIdLars);
+		if (lars) {
+			Scene::setAnim(*lars, 2);
+			Scene::stopScript(*lars);
+			SceneObject::Move m = { 0xa8, 0, 2, 0x38 };
+			lars->moves.push_back(m);
+			_scene.startScript(*lars, kEventLarsAtGroup);
+		}
+		setInput(false);
+		if (olga)
+			Scene::setAnim(*olga, 9);
+		break;
+	}
+	case kEventLarsAtGroup: {
+		// Responses_0e6f: Lars and the group talk; Lars at 84,82, Olga at
+		// 274,77, praise
+		_flags[kIdLars] |= 2;
+		_flags[kIdGroup] |= 1;
+		SceneObject *lars = _scene.findObject(kIdLars);
+		if (lars)
+			Scene::setPosition(*lars, 0x54, 0x52);
+		refresh(kIdLars);
+		if (olga) {
+			Scene::setPosition(*olga, 0x112, 0x4d);
+			Scene::setAnim(*olga, 1);
+		}
+		showPraise();
+		break;
+	}
+	case kEventOwnerShouts: {
+		// Responses_120e: the owner shouts (colour 12, no timer) for
+		// text speed * 34 / 3 frames, then event 0x11
+		SceneObject *owner = _scene.findObject(kIdOwner);
+		_screen->fillRect(Common::Rect(0, 0, 320, kRoomTop), 0);
+		_font.drawCentred(*_screen, _exe.readString(kSegResponses, 0x11eb), 0, 0xc);
+		if (owner) {
+			Scene::stopScript(*owner);
+			owner->moves.push_back(move(4, _textSpeed * 0x22 / 3));
+			_scene.startScript(*owner, kEventPolice);
+		} else {
+			setExit(100, 2);
+		}
+		break;
+	}
+	case kEventPolice:
+		// Responses_129e: the police ending
+		setExit(100, 2);
 		break;
 	default:
 		break;
@@ -324,6 +430,206 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 			return false;
 		return verbLamp(id, *t, other);
 	}
+	case kVmtFormWindow:
+		// FORMNING's window (1222:427e / 436c): open makes the girl 202 cold
+		if (verb == kVerbSePaa) {
+			sayExe(kSeg, (f & 1) ? 0x06b1 : 0x06bf);
+		} else if (verb == kVerbAaben) {
+			if (f & 1) {
+				sayExe(kSeg, 0x4268);
+			} else {
+				f |= 1;
+				_flags[kIdFormGirl] |= 1;
+				refresh(id);
+				refresh(kIdFormGirl);
+				if (olga)
+					Scene::setAnim(*olga, 1);
+				showDevil();
+			}
+		} else if (verb == kVerbLuk) {
+			if (!(f & 1)) {
+				sayExe(kSeg, 0x4355);
+			} else {
+				f &= ~1;
+				_flags[kIdFormGirl] &= ~1;
+				refresh(kIdFormGirl);
+				if (olga)
+					Scene::setAnim(*olga, 1);
+				showPraise();
+				refresh(id);
+			}
+		} else {
+			return false;
+		}
+		return true;
+	case kVmtKids:
+		// 1222:446b / 4503: the arkitektlampe (107) is their light
+		if (verb == kVerbSePaa)
+			sayExe(kSeg, (f & 1) ? 0x4458 : 0x443d);
+		else if (verb == kVerbTalTil)
+			sayExe(kSeg, (f & 1) ? 0x44ed : 0x44c9, 0x2, false);
+		else
+			return false;
+		return true;
+	case kVmtFormGirl:
+		// 1222:3326 / 345c: cold (bit 0), markers swapped (bit 2), gas mask (bit 1)
+		if (verb == kVerbSePaa) {
+			sayExe(kSeg, (f & 1) ? 0x32c8 : (f & 4) ? 0x32df : (f & 2) ? 0x32f4 : 0x3309);
+		} else if (verb == kVerbTalTil) {
+			if (f & 1)
+				sayExe(kSeg, 0x3417, 0xb, false);
+			else if (f & 4)
+				sayExe(kSeg, 0x3430, 0x2, false);
+			else if (f & 2)
+				sayExe(kSeg, 0x3441, 0x2, false);
+			else
+				sayExe(kSeg, 0x3456, 0xa, false);
+		} else {
+			return false;
+		}
+		return true;
+	case kVmtMarkers:
+		// 1222:3dbf / 3cad: the markers on the girl's table
+		if (verb == kVerbTag)
+			sayExe(kSeg, 0x3da0);
+		else if (verb == kVerbSePaa)
+			sayExe(kSeg, f == 0 ? 0x3c56 : f == 1 ? 0x3c7a : 0x3c90);
+		else
+			return false;
+		return true;
+	case kVmtMarkerThing:
+		// 1222:39d6: Giv tuscher (141) / farveblyanter (142) til pige 202
+		if (verb != kVerbGiv || other != kIdFormGirl)
+			return false;
+		if (!(f & 1)) {
+			say(_exe.readString(kSeg, 0x39c7) + _exe.readString(kSeg, thing(id)->pronounOff) +
+				_exe.readString(kSeg, 0x39cf));
+		} else if (!(_flags[kIdFormGirl] & 4)) {
+			_flags[kIdFormGirl] |= 4;
+			refresh(kIdFormGirl);
+			_flags[kIdMarkers] = id == kIdCrayons ? 1 : 2;
+			refresh(kIdMarkers);
+			showPraise();
+			removeFromInventory(id);
+		} else {
+			sayExe(kSeg, id == kIdCrayons ? 0x3989 : 0x39a5);
+		}
+		return true;
+	case kVmtGasMask:
+		// 1222:3b6d: Giv gasmaske til pige 202 is the wrong answer
+		if (verb != kVerbGiv || other != kIdFormGirl)
+			return false;
+		if (!(_flags[kIdFormGirl] & 5)) {
+			_flags[kIdFormGirl] |= 2;
+			refresh(kIdFormGirl);
+			removeFromInventory(id);
+			showDevil();
+		} else {
+			sayExe(kSeg, 0x3b4c);
+		}
+		return true;
+	case kVmtPicture:
+		// 1222:1c03 / 1c89: Olga's picture on the ugly wall 140
+		if ((verb != kVerbBrug && verb != kVerbGiv) || other != kIdWall)
+			return false;
+		f = 1;
+		removeFromInventory(id);
+		_flags[kIdWall] = 1;
+		refresh(kIdWall);
+		showPraise();
+		return true;
+	case kVmtWall:
+		// 1222:1d50 / 1cdb
+		if (verb == kVerbTag && f)
+			sayExe(kSeg, 0x1d30);
+		else if (verb == kVerbSePaa)
+			sayExe(kSeg, f ? 0x1cc8 : 0x1cb5);
+		else
+			return false;
+		return true;
+	case kVmtPoison:
+	case kVmtSalmiak:
+		// 1222:3873 (Brug) / 51c4, 38cb (Giv): miljøbil, the paint shop's
+		// door or the bucket are right (state 3), the sink is wrong (5);
+		// giving the poison to the dog ends the game (police)
+		if (verb == kVerbGiv && id == 128 && other == kIdDog) {
+			removeFromInventory(id);
+			_flags[kIdDog] = 4;
+			refresh(kIdDog);
+			_flags[kIdPaperBoy] = 4;
+			refresh(kIdPaperBoy);
+			if (olga)
+				Scene::setAnim(*olga, 8);
+			setInput(false);
+			SceneObject *owner = _scene.findObject(kIdOwner);
+			if (owner) {
+				Scene::stopScript(*owner);
+				owner->moves.push_back(move(3, 10));
+				_scene.startScript(*owner, kEventOwnerShouts);
+			} else {
+				situationEvent({ kEventOwnerShouts, -1 });
+			}
+			return true;
+		}
+		if (verb == kVerbGiv && id == 128 && (other == kIdSister || other == 209)) {
+			sayExe(kSeg, 0x51a2);
+			return true;
+		}
+		if (verb != kVerbBrug && !(verb == kVerbGiv && (isDisposal(other) || other == kIdSink)))
+			return false;
+		if (isDisposal(other)) {
+			// FUN_1222_364a
+			if (f & 1)
+				removeFromInventory(id);
+			f = 3;
+			refresh(id);
+			if (olga)
+				Scene::setAnim(*olga, 1);
+			sayExe(kSeg, 0x362e);
+			if (other == kIdFarvehDoor) {
+				_flags[kIdFarvehDoor] ^= 1;
+				refresh(kIdFarvehDoor);
+			}
+		} else if (other == kIdSink) {
+			// Situations_3771: down the sink; the kitchen door shuts
+			if (f & 1)
+				removeFromInventory(id);
+			f = 5;
+			refresh(id);
+			if (_flags[kIdKitchenDoor] == 1) {
+				_flags[kIdKitchenDoor] = 0;
+				refresh(kIdKitchenDoor);
+			}
+			showDevil();
+		} else {
+			return verbThing(id, verb, other);
+		}
+		return true;
+	case kVmtLars:
+		// 1222:295e (Tag; Skub and Træk call it) and Brug / Giv med gruppe 165
+		if (verb == kVerbTag || verb == kVerbSkub || verb == kVerbTraek ||
+			((verb == kVerbBrug || verb == kVerbGiv) && other == kIdGroup)) {
+			f |= 1;
+			refresh(id);
+		} else if (verb == kVerbSePaa) {
+			sayExe(kSeg, 0x28ec);
+		} else if (verb == kVerbTalTil) {
+			sayExe(kSeg, 0x2937, 0x2, false);
+		} else {
+			return false;
+		}
+		return true;
+	case kVmtGroup:
+		// 1222:2c28 / 2cb4
+		if (verb == kVerbSePaa)
+			sayExe(kSeg, (f & 1) ? 0x2c07 : 0x2be7);
+		else if (verb == kVerbTalTil && !(f & 1))
+			sayExe(kSeg, 0x2c86, 0x2, false);
+		else if (verb == kVerbTalTil)
+			sayExe(kSeg, 0x2c95);
+		else
+			return false;
+		return true;
 	default:
 		return false;
 	}

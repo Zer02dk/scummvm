@@ -99,6 +99,13 @@ public:
 	void startScript(SceneObject &obj, int event);
 	/** Stop a script (Scene_12d3) without its event. */
 	static void stopScript(SceneObject &obj);
+	/** Scene1e9c_0087 (method 0): place the object; its hotspot moves along. */
+	static void setPosition(SceneObject &obj, int x, int y) {
+		obj.hotDx += x - obj.x;
+		obj.hotDy += y - obj.y;
+		obj.x = x;
+		obj.y = y;
+	}
 	/** Apply the requested animations at once (after the handlers' refresh). */
 	void settle();
 	/** Events posted since the last call. */

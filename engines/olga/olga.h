@@ -88,6 +88,7 @@ private:
 	// Game state: the records' flags (DS:1ca1) and the inventory (DS:3ef0)
 	uint32 _flags[kLastId + 1];
 	Common::Array<int> _inventory;
+	Common::String _names[kLastId + 1]; // a name a refresh wrote, or empty
 	int _inventoryRow = 1;  // InvPanel +0x1df
 
 	// The sentence (room view +0xcad..+0xcb5)

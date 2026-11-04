@@ -56,6 +56,9 @@ const uint16 kSegSituations = 0x1222;
 Common::String OlgaEngine::objectName(int id) const {
 	if (id <= kNoObject || id > kLastId)
 		return Common::String();
+	// Some refreshes rename their object (1222:3d0b, 1da5)
+	if (!_names[id].empty())
+		return _names[id];
 	const StateDef &s = kStates[id - kFirstId];
 	return _exe.readString(s.nameSeg, s.nameOff);
 }
@@ -193,6 +196,9 @@ const ThingDef *OlgaEngine::thing(int id) const {
 
 bool OlgaEngine::hotspotOff(int id) const {
 	const ThingDef *t = thing(id);
+	// Lars with the group (1222:2a91 switches his control off)
+	if (id == 164 && (_flags[id] & 2))
+		return true;
 	return (_flags[id] & 0x100) || (t && t->pronounOff && (_flags[id] & 1));
 }
 
