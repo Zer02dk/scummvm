@@ -1824,7 +1824,7 @@ bool PlayableScene::playFullscreenDeltaAnimation(const Common::Array<byte> &base
 		}
 	}
 
-	_paletteCurrent = blackPalette;
+	_paletteCurrent = Common::move(blackPalette);
 	_displayPalette.markAllDirty();
 	presentFrame();
 
@@ -2096,6 +2096,7 @@ void PlayableScene::refreshTranslatedText() {
 		return;
 	}
 	applySceneStateToHotspotsAndPatches(0xff);
+	_hotspots.setItemNames(_stage003SmallRows);
 }
 
 bool PlayableScene::shouldExitGameplayLoop() const {
@@ -3485,6 +3486,7 @@ void PlayableScene::presentFrame(const SceneHoverCaption *hoverCaption, const Ga
 	const bool screenChanged = _surfaceState.updatePresentedScreenCache();
 	if (screenChanged || paletteChanged)
 		g_system->copyRectToScreen(_screen.getPixels(), _screen.pitch, 0, 0, _screen.w, _screen.h);
+	_vm->drawSceneHotspots(hoverCaption && !(panelState && panelState->visible()) ? this : nullptr);
 	g_system->updateScreen();
 }
 
