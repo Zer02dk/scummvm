@@ -52,7 +52,9 @@ struct LocationDef {
 	const char *scn;
 	const char *spriteLbm; // Olga's sprite file, "" for none
 	const char *prs;
-	const char *title;     // pop-ups only (UTF-8)
+	uint16 titleSeg;       // pop-ups: the title's Pascal string in OLGA.EXE
+	uint16 titleOff;
+	int answers;           // pop-ups: the number of answer buttons
 	int numEntries;
 	struct { int16 x, y; } entries[kMaxEntries]; // Olga's base position, entry 1 = where she was
 };

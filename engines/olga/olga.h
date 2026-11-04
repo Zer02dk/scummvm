@@ -100,6 +100,20 @@ private:
 	int _textTimer = 0;
 	int _textSpeed = 6;     // DS:27a4, frames per character (SkiftTid)
 
+	// The room's input (App_02e9): off while the devil or the praise plays
+	bool _inputEnabled = true;
+	bool _fastWalk = false;    // debug setting fast_walk
+	// Feedback (notes/situation-logic.md)
+	int _devilCount = 0;       // room view +0xcc2
+	bool _devilFirst = true;   // DS:2590: "HA!!! Forkert!" the first time
+	bool _pendingDevil = false;  // DS:2592: shown when the next room starts
+	bool _pendingPraise = false; // DS:2593
+
+	// Pop-ups (location type kLocPopup, overlay 53cd)
+	bool _popup = false;
+	int _popupAnswers = 0;
+	LbmImage _answerImages[4];
+
 	// Images built into OLGA.EXE
 	LbmImage _verbImages[kNumVerbs];
 	LbmImage _arrowImages[2];
@@ -118,7 +132,7 @@ private:
 
 	// Interface (interface.cpp)
 	void drawPanel();
-	void drawButton(const LbmImage &img, int x, int y, bool pressed);
+	void drawButton(const LbmImage &img, int x, int y, bool pressed, int bevel = 1);
 	void drawVerbs();
 	void drawInventory();
 	void drawSentence(bool running);
@@ -154,6 +168,28 @@ private:
 	void leaveRoom();
 	Common::String objectName(int id) const;
 	bool carried(int id) const;
+	void setInput(bool enabled);
+
+	// The situations (situations.cpp, notes/situation-logic.md)
+	/** A situation class's verb; false if the class has none for it. */
+	bool verbSituation(int id, int verb, int other);
+	/** A situation class's refresh; false if it has its own none. */
+	bool refreshSituation(int id, SceneObject &o);
+	/** Room events of the situations (Responses_RoomEvent). */
+	void situationEvent(const SceneEvent &e);
+	/** S[134] = 1 (the devil) or S[190] = 1 (the praise), and refresh it. */
+	void showDevil();
+	void showPraise();
+	/** Responses_19c6: a pop-up's devil or praise when the room starts. */
+	void startPendingFeedback();
+	/** Lamps (Lamp_Brug 1222:472d). */
+	bool verbLamp(int id, const ThingDef &t, int other);
+
+	// Pop-ups (popup.cpp)
+	bool gotoPopup(int number);
+	void drawPopup();
+	int popupHitTest(const Common::Point &p);
+	void popupAnswer(int choice);
 
 protected:
 	Common::Error run() override;

@@ -126,6 +126,8 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	if (number < 1 || number > kNumLocations)
 		return false;
 	LocationDef loc = kLocations[number - 1];
+	if (loc.kind == kLocPopup)
+		return gotoPopup(number);
 	if (loc.kind != kLocRoom)
 		return false;
 	for (int e = 0; e < kMaxEntries; e++) {
@@ -135,10 +137,13 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	if (!_scene.load(loc, entry))
 		return false;
 	_location = number;
+	_popup = false;
 	_nextLocation = 0;
 	_pending = false;
 	_textTimer = 0;
 	_verb = kVerbBrug;
+	_roomView.create(kRoomWidth, kRoomHeight, Graphics::PixelFormat::createFormatCLUT8());
+	setInput(true);
 	// Every hotspot's handler is attached and refreshed (method 1 -> 11):
 	// objects set their animation, cupboards show or hide their contents
 	for (uint i = 0; i < _scene.scn().objects.size(); i++)
@@ -151,6 +156,7 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	_screen->clear(0);
 	drawPanel();
 	resetSentence();
+	startPendingFeedback();
 	return true;
 }
 
@@ -158,7 +164,7 @@ void OlgaEngine::leaveRoom() {
 	// RoomLoc_Run (1000:02c6): Olga's place, without her animation offset,
 	// becomes entry 1 of the room she leaves
 	SceneObject *olga = _scene.olga();
-	if (olga && olga->anim >= 1) {
+	if (!_popup && olga && olga->anim >= 1) {
 		const ScnAnim &a = olga->def.anims[olga->anim - 1];
 		_entries[_location - 1][0] = { (int16)(olga->x - a.dx), (int16)(olga->y - a.dy) };
 	}
@@ -177,12 +183,20 @@ Common::Error OlgaEngine::run() {
 
 	// Main_Body: the hourglass, two title pictures of 6 s each (1000:198b,
 	// 1000:1994)
+	// Debugging: "skip_intro=true" in the game's section of scummvm.ini
+	// starts in the first room
 	setCursor(0x138e);
-	if (!showPicture("OLGA.LBM"))
-		return Common::kReadingFailed;
-	waitOrKey(6000);
-	if (!shouldQuit() && showPicture("REKLAME.LBM"))
+	bool skipIntro = ConfMan.hasKey("skip_intro") && ConfMan.getBool("skip_intro");
+	if (!skipIntro) {
+		if (!showPicture("OLGA.LBM"))
+			return Common::kReadingFailed;
 		waitOrKey(6000);
+		if (!shouldQuit() && showPicture("REKLAME.LBM"))
+			waitOrKey(6000);
+	}
+	// Debugging: "fast_walk=true" makes Olga jump to where she walks (for
+	// testing; not in the original)
+	_fastWalk = ConfMan.hasKey("fast_walk") && ConfMan.getBool("fast_walk");
 
 	// The room view is enabled: the arrow (App_02e9)
 	setCursor(0x134e);
@@ -198,13 +212,23 @@ Common::Error OlgaEngine::run() {
 		while (g_system->getEventManager()->pollEvent(e)) {
 			switch (e.type) {
 			case Common::EVENT_MOUSEMOVE:
-				onHover(e.mouse);
+				if (_inputEnabled && !_popup)
+					onHover(e.mouse);
 				break;
 			case Common::EVENT_LBUTTONDOWN:
-				onClick(e.mouse);
+				if (!_inputEnabled)
+					break;
+				if (_popup) {
+					int k = popupHitTest(e.mouse);
+					if (k)
+						popupAnswer(k);
+				} else {
+					onClick(e.mouse);
+				}
 				break;
 			case Common::EVENT_KEYDOWN:
-				onKey(e.kbd);
+				if (_inputEnabled && !_popup)
+					onKey(e.kbd);
 				break;
 			default:
 				break;
@@ -220,7 +244,7 @@ Common::Error OlgaEngine::run() {
 		if (_nextLocation)
 			leaveRoom();
 		_scene.draw(_roomView);
-		_screen->blitFrom(_roomView, Common::Point(0, kRoomTop));
+		_screen->blitFrom(_roomView, _popup ? Common::Point(4, 14) : Common::Point(0, kRoomTop));
 		_screen->update();
 		uint32 used = g_system->getMillis() - start;
 		if (used < kFrameMs)

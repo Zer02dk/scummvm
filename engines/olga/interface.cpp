@@ -49,27 +49,30 @@ Common::Rect buttonRect(const LbmImage &img, const Common::Point &p) {
 
 } // End of anonymous namespace
 
-void OlgaEngine::drawButton(const LbmImage &img, int x, int y, bool pressed) {
-	// Gui_0885: the image (opaque) at x, y, pressed one pixel lower-right;
-	// Gui_0455 a black border; Gui_04d6 (raised) light 15 top / left, dark 8
-	// bottom / right, face 7 corners; Gui_067b (pressed) dark top / left
-	// with a face line inside
-	Common::Rect r = buttonRect(img, Common::Point(x, y));
+void OlgaEngine::drawButton(const LbmImage &img, int x, int y, bool pressed, int bevel) {
+	// Gui_0885: the image (opaque) at x, y, pressed `bevel` pixels lower-
+	// right; Gui_0455 a black border of 1; for each bevel line i, Gui_04d6
+	// (raised) draws light 15 top / left, dark 8 bottom / right and face 7
+	// corners, Gui_067b (pressed) dark top / left with a face line inside
+	const int b = 1;
+	Common::Rect r(x - b - bevel, y - b - bevel, x + img.surface.w + b + bevel, y + img.surface.h + b + bevel);
 	int x1 = r.left, y1 = r.top, x2 = r.right - 1, y2 = r.bottom - 1;
-	_screen->blitFrom(img.surface, Common::Point(pressed ? x + 1 : x, pressed ? y + 1 : y));
+	_screen->blitFrom(img.surface, Common::Point(pressed ? x + bevel : x, pressed ? y + bevel : y));
 	_screen->frameRect(r, 0);
-	if (!pressed) {
-		_screen->hLine(x1 + 1, y1 + 1, x2 - 2, 15);
-		_screen->vLine(x1 + 1, y1 + 1, y2 - 2, 15);
-		_screen->hLine(x1 + 2, y2 - 1, x2 - 1, 8);
-		_screen->vLine(x2 - 1, y1 + 2, y2 - 1, 8);
-		_screen->setPixel(x1 + 1, y2 - 1, 7);
-		_screen->setPixel(x2 - 1, y1 + 1, 7);
-	} else {
-		_screen->hLine(x1 + 1, y1 + 1, x2 - 1, 8);
-		_screen->vLine(x1 + 1, y1 + 2, y2 - 1, 8);
-		_screen->hLine(x1 + 2, y1 + 2, x2 - 1, 7);
-		_screen->vLine(x1 + 2, y1 + 3, y2 - 1, 7);
+	for (int i = b; i < b + bevel; i++) {
+		if (!pressed) {
+			_screen->hLine(x1 + i, y1 + i, x2 - i - 1, 15);
+			_screen->vLine(x1 + i, y1 + i, y2 - i - 1, 15);
+			_screen->hLine(x1 + i + 1, y2 - i, x2 - i, 8);
+			_screen->vLine(x2 - i, y1 + i + 1, y2 - i, 8);
+			_screen->setPixel(x1 + i, y2 - i, 7);
+			_screen->setPixel(x2 - i, y1 + i, 7);
+		} else {
+			_screen->hLine(x1 + i, y1 + i, x2 - b, 8);
+			_screen->vLine(x1 + i, y1 + i + 1, y2 - b, 8);
+			_screen->hLine(x1 + i + bevel, y1 + i + bevel, x2 - b, 7);
+			_screen->vLine(x1 + i + bevel, y1 + i + bevel + 1, y2 - b, 7);
+		}
 	}
 }
 
@@ -123,15 +126,14 @@ void OlgaEngine::drawInventory() {
 
 void OlgaEngine::drawSentence(bool running) {
 	// Responses_DrawSentence (5427:1647): verb + " " + object; Brug / Giv on
-	// a two-object id + " med " / " til " + the second object. Colour 3,
-	// 11 while the action runs. The joining words are in OLGA.OVR (5427:163b,
-	// 1641); they are written out here.
+	// a two-object id + " med " / " til " + the second object (5427:1641 /
+	// 163b, in OLGA.OVR). Colour 3, 11 while the action runs.
 	Common::String s = _exe.readString(kSegData, 0x0d14 + 11 * _verb);
 	if (_obj1 != kNoObject) {
 		s += " ";
 		s += objectName(_obj1);
 		if ((_verb == kVerbGiv || _verb == kVerbBrug) && kStates[_obj1 - kFirstId].twoObjects) {
-			s += _verb == kVerbGiv ? " til " : " med ";
+			s += _exe.readString(0x5427, _verb == kVerbGiv ? 0x163b : 0x1641);
 			if (_obj2 != kNoObject)
 				s += objectName(_obj2);
 		}

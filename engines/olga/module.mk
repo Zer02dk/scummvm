@@ -8,9 +8,11 @@ MODULE_OBJS = \
 	lbm.o \
 	metaengine.o \
 	olga.o \
+	popup.o \
 	room.o \
 	scene.o \
 	scn.o \
+	situations.o \
 	walk.o
 
 # This module can be built as a plugin

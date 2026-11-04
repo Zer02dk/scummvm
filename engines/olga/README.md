@@ -27,6 +27,13 @@ strip scummvm.exe
 ```
 Start it from the same UCRT64 shell so that it finds the SDL2 DLLs.
 
+## Debug settings
+
+In the game's section of `scummvm.ini` (edit it while ScummVM is closed):
+- `skip_intro=true`: no title pictures, the game starts in the first room.
+- `fast_walk=true`: Olga jumps to where she walks and the verb runs at once
+  (for testing; not in the original).
+
 ## Debugger
 
 Ctrl+Alt+D opens the debugger. `room <name>` shows another room picture,

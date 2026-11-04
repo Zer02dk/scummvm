@@ -134,6 +134,16 @@ void OlgaEngine::startVerb() {
 		return;
 	}
 	Scene::stopScript(*olga);
+	if (_fastWalk) {
+		// Debugging only: the moves' sum puts her feet on the walk's last
+		// point; the verb runs at once
+		for (uint i = 0; i < moves.size(); i++) {
+			olga->x += moves[i].dx;
+			olga->y += moves[i].dy;
+		}
+		runVerb();
+		return;
+	}
 	olga->moves = moves;
 	_scene.startScript(*olga, kEventArrived);
 	_pending = true;
@@ -141,10 +151,15 @@ void OlgaEngine::startVerb() {
 }
 
 void OlgaEngine::handleEvent(const SceneEvent &e) {
-	// Responses_RoomEvent (5427:1454); so far only event 3
-	if (e.code == kEventArrived && _pending && e.object == _scene.olgaIndex()) {
-		_pending = false;
-		runVerb();
+	// Responses_RoomEvent (5427:1454): 3 = Olga arrived, the rest belong to
+	// the situations
+	if (e.code == kEventArrived) {
+		if (_pending && e.object == _scene.olgaIndex()) {
+			_pending = false;
+			runVerb();
+		}
+	} else {
+		situationEvent(e);
 	}
 }
 
@@ -159,10 +174,12 @@ void OlgaEngine::runVerb() {
 	debugC(1, kDebugGraphics, "verb %d on %d (%d)", _verb, id, _obj2);
 	if (id > kNoObject && id <= kLastId) {
 		uint16 vmt = kStates[id - kFirstId].vmt;
-		if (isDoor(id) || vmt == kVmtPassage)
-			verbDoor(id, _verb);
-		else if (!verbThing(id, _verb, _obj2))
-			verbBase(_verb);
+		if (!verbSituation(id, _verb, _obj2)) {
+			if (isDoor(id) || vmt == kVmtPassage)
+				verbDoor(id, _verb);
+			else if (!verbThing(id, _verb, _obj2))
+				verbBase(_verb);
+		}
 	}
 	resetSentence();
 }
@@ -284,6 +301,8 @@ void OlgaEngine::refresh(int id) {
 	}
 	SceneObject *o = _scene.findObject(id);
 	if (!o)
+		return;
+	if (refreshSituation(id, *o))
 		return;
 	const ThingDef *t = thing(id);
 	if (isDoor(id))

@@ -34,9 +34,10 @@ enum {
 };
 
 /**
- * OLGA.EXE, for the texts and images built into the code. Addresses are
- * segment:offset in the Ghidra numbering of the research notes (the EXE
- * image loaded at segment 0x1000).
+ * OLGA.EXE and OLGA.OVR, for the texts and images built into the code.
+ * Addresses are segment:offset in the Ghidra numbering of the research
+ * notes: the EXE image loaded at segment 0x1000, the overlay units at
+ * 5000 and up (notes/overlays.md).
  */
 class ExeFile {
 public:
@@ -53,9 +54,10 @@ public:
 	bool readBitmap(uint16 seg, uint16 off, LbmImage &img) const;
 
 private:
-	uint32 offset(uint16 seg, uint16 off) const;
+	const byte *at(uint16 seg, uint16 off, uint32 size) const;
 
 	Common::Array<byte> _data;
+	Common::Array<byte> _ovr;
 	uint32 _header = 0;
 };
 
