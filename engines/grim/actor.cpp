@@ -820,15 +820,14 @@ void Actor::walkForward() {
 	_walking = false;
 
 	if (!_followBoxes) {
-		Math::Vector3d forwardVec(-_moveYaw.getSine() * _pitch.getCosine(),
-		                           _moveYaw.getCosine() * _pitch.getCosine(), _pitch.getSine());
+		Math::Vector3d forwardVec(-_moveYaw.getSine(),
+		                           _moveYaw.getCosine(), 0);
 
 		// EMI: Y is up-down, actors use an X-Z plane for movement
 		if (g_grim->getGameType() == GType_MONKEY4) {
-			float temp = forwardVec.z();
 			forwardVec.x() = -forwardVec.x();
 			forwardVec.z() = forwardVec.y();
-			forwardVec.y() = temp;
+			forwardVec.y() = 0;
 		}
 
 		_pos += forwardVec * dist;
@@ -849,15 +848,14 @@ void Actor::walkForward() {
 
 		g_grim->getCurrSet()->findClosestSector(_pos, &currSector, &_pos);
 		if (!currSector) { // Shouldn't happen...
-			Math::Vector3d forwardVec(-_moveYaw.getSine() * _pitch.getCosine(),
-			                           _moveYaw.getCosine() * _pitch.getCosine(), _pitch.getSine());
+			Math::Vector3d forwardVec(-_moveYaw.getSine(),
+			                           _moveYaw.getCosine(), 0);
 
 			// EMI: Y is up-down, actors use an X-Z plane for movement
 			if (g_grim->getGameType() == GType_MONKEY4) {
-				float temp = forwardVec.z();
 				forwardVec.x() = -forwardVec.x();
 				forwardVec.z() = forwardVec.y();
-				forwardVec.y() = temp;
+				forwardVec.y() = 0;
 			}
 
 			if (backwards)
@@ -878,18 +876,18 @@ void Actor::walkForward() {
 				Math::Angle ax = Math::Vector2d(normal.x(), normal.z()).getAngle();
 				Math::Angle ay = Math::Vector2d(normal.y(), normal.z()).getAngle();
 
-				float z1 = -_moveYaw.getCosine() * (ay - _pitch).getCosine();
-				float z2 = _moveYaw.getSine() * (ax - _pitch).getCosine();
-				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine() * _pitch.getCosine(),
-				                             _moveYaw.getCosine() * ay.getSine() * _pitch.getCosine(), z1 + z2);
+				float z1 = -_moveYaw.getCosine() * ay.getCosine();
+				float z2 = _moveYaw.getSine() * ax.getCosine();
+				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine(),
+				                             _moveYaw.getCosine() * ay.getSine(), z1 + z2);
 			} else {
 				Math::Angle ax = Math::Vector2d(normal.x(), normal.y()).getAngle();
 				Math::Angle az = Math::Vector2d(normal.z(), normal.y()).getAngle();
 
-				float y1 = _moveYaw.getCosine() * (az - _pitch).getCosine();
-				float y2 = _moveYaw.getSine() * (ax - _pitch).getCosine();
-				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine() * _pitch.getCosine(), y1 + y2,
-				                            -_moveYaw.getCosine() * az.getSine() * _pitch.getCosine());
+				float y1 = _moveYaw.getCosine() * az.getCosine();
+				float y2 = _moveYaw.getSine() * ax.getCosine();
+				forwardVec = Math::Vector3d(-_moveYaw.getSine() * ax.getSine(), y1 + y2,
+				                            -_moveYaw.getCosine() * az.getSine());
 			}
 
 			if (backwards)
@@ -1138,6 +1136,7 @@ Math::Angle Actor::getYawTo(const Math::Vector3d &p) const {
 
 	if (g_grim->getGameType() == GType_MONKEY4) {
 		dpos.y() = dpos.z();
+		dpos.x() = -dpos.x();
 	}
 	if (dpos.x() == 0 && dpos.y() == 0)
 		return 0;
@@ -2044,7 +2043,7 @@ Math::Vector3d Actor::getTangentPos(const Math::Vector3d &pos, const Math::Vecto
 	}
 	Math::Vector3d p;
 	float size;
-	if (!getSphereInfo(false, size, p))
+	if (!getSphereInfo(size, p))
 		return dest;
 	Math::Vector2d p1(pos.x(), pos.y());
 	Math::Vector2d p2(dest.x(), dest.y());
@@ -2118,7 +2117,7 @@ void Actor::getBBoxInfo(Math::Vector3d &bboxPos, Math::Vector3d &bboxSize) const
 	}
 }
 
-bool Actor::getSphereInfo(bool adjustZ, float &size, Math::Vector3d &p) const {
+bool Actor::getSphereInfo(float &size, Math::Vector3d &p) const {
 	if (g_grim->getGameType() == GType_MONKEY4) {
 		EMICostume *costume = static_cast<EMICostume *>(getCurrentCostume());
 		if (!costume) {
@@ -2134,11 +2133,7 @@ bool Actor::getSphereInfo(bool adjustZ, float &size, Math::Vector3d &p) const {
 		Model *model = getCurrentCostume()->getModel();
 		assert(model);
 
-		p = _pos + model->_insertOffset;
-		// center the sphere on the model center.
-		if (adjustZ) {
-			p.z() += model->_bboxSize.z() / 2.f;
-		}
+		p = _pos + model->_insertOffset + model->_center;
 		size = model->_radius * _collisionScale;
 	}
 	return true;
@@ -2155,11 +2150,7 @@ bool Actor::handleCollisionWith(Actor *actor, CollisionMode mode, Math::Vector3d
 
 	Math::Vector3d p1, p2;
 	float size1, size2;
-	// you may ask: why center the sphere of the first actor only (by setting adjustZ to true)?
-	// because it seems the original does so.
-	// if you change this code test this places: the rocks in lb and bv (both when booting directly in the
-	// set and when coming in from another one) and the poles in xb.
-	if (!this->getSphereInfo(true, size1, p1) || !actor->getSphereInfo(false, size2, p2)) {
+	if (!this->getSphereInfo(size1, p1) || !actor->getSphereInfo(size2, p2)) {
 		return false;
 	}
 

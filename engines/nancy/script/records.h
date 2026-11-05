@@ -23,6 +23,7 @@
 #define NANCY_SCRIPT_RECORDS_H
 
 #include "common/array.h"
+#include "common/ptr.h"
 #include "common/rect.h"
 
 #include "engines/nancy/commontypes.h"
@@ -59,8 +60,9 @@ enum RecordKind {
 	kRecordPhysics		= 11,	// Nancy21
 	kRecordXsheet		= 12,	// Nancy22
 	kRecordTransformer	= 13,	// Nancy22
+	kRecordTimer		= 14,	// Nancy24
 
-	kNumRecordKinds		= 14
+	kNumRecordKinds		= 15
 };
 
 // What scripts call the kind ("NavLogic"), and the type of its objects ("ND.NavLogic")
@@ -73,6 +75,10 @@ Record *makeRecord(RecordKind kind, SceneContext &context);
 // What the "Draw" object of the scripts draws on: the record whose "Render"
 // function is running. Null at any other time.
 Graphics::ManagedSurface *getDrawTarget();
+
+// Draw:OVL(table), Nancy24: draws the picture of an Overlay record onto what
+// the record that is rendering draws
+int drawOverlay(lua_State *L);
 
 // What a record draws. Records are placed in the coordinates of the viewport.
 class RecordGraphic : public RenderObject {
@@ -108,12 +114,15 @@ public:
 	// The viewport that shows the background, once it has been loaded
 	void setBackground(UI::Viewport *background);
 
+	void registerGraphics() override;
+
 protected:
 	void readTable(int tableIndex) override;
 	void runOnce() override;
 	void run(double sceneTime, double elapsedTime) override;
 	bool hasTransform() const override { return true; }
 	bool getField(const Common::String &key) override;
+	bool setField(const Common::String &key) override;
 
 	void onMouseMove(const ScriptPoint &point, bool inViewport) override;
 	bool getCursor(const ScriptPoint &point, bool inViewport, uint &cursorType, bool &isHot) override;
@@ -149,6 +158,7 @@ private:
 
 	bool _wraps = true;
 	bool _hasUturn = true;
+	bool _canRotate = true;	// Nancy24: whether the sides turn the view
 	bool _isFacade = false;
 	RecordGraphic _facade;
 };
@@ -216,6 +226,7 @@ public:
 	virtual ~OverrideRecord();
 
 	void updateGraphics() override;
+	void registerGraphics() override;
 	void onSave() override { callFunction("OnSave"); }
 	void onDie() override { callFunction("OnDie"); }
 	bool hasMessagingName(const Common::String &name) override;
@@ -249,24 +260,36 @@ public:
 	OverlayRecord(SceneContext &context) : Record(context, "ND.Overlay") {}
 
 	void updateGraphics() override;
+	void registerGraphics() override;
+
+	// Nancy24: Draw:OVL draws the picture once more while another record
+	// renders. The table at tableIndex can replace its source, onScreen,
+	// transform and modColor.
+	void drawCopy(int tableIndex);
 
 protected:
 	void readTable(int tableIndex) override;
 	void onZChanged() override;
 	bool hasTransform() const override { return true; }
-	void onTransformChanged() override { applyRects(); }
+	void onTransformChanged() override;
 	void renderNow() override;
 	bool getField(const Common::String &key) override;
 	bool setField(const Common::String &key) override;
 
 private:
+	void readDest(int index);
+	void readDestTable(Common::Array<ScriptRect> &dests);
 	void applyRects();
 
-	Graphics::ManagedSurface _image;
+	Common::SharedPtr<Graphics::ManagedSurface> _cachedImage;	// kept while the record uses it
+	Graphics::ManagedSurface _image;	// the cached picture, or a saved one
 	ScriptRect _source;
 	ScriptRect _dest;
+	bool _hasDestTable = false;					// Nancy24: onScreen is a table of rects
+	Common::Array<ScriptRect> _tableDests;		// what it had when last drawn
 	uint32 _modColor = 0xFFFFFFFF;	// what the colors of the picture get multiplied with
 	bool _hasPicture = false;
+	bool _isPlacementStale = false;		// the transform changed while it was hidden
 	RecordGraphic _graphic;
 
 	// The picture as a script had it drawn by itself, which lasts for a frame
@@ -281,6 +304,7 @@ public:
 	AnimOverlayRecord(SceneContext &context) : Record(context, "ND.AnimOvlAR") {}
 
 	void updateGraphics() override;
+	void registerGraphics() override;
 
 	void setPaused(bool isPaused) { _isPaused = isPaused; }
 
@@ -303,7 +327,8 @@ private:
 	void applyFrame();
 	void beginLoop();
 
-	Graphics::ManagedSurface _image;
+	Common::SharedPtr<Graphics::ManagedSurface> _cachedImage;	// kept while the record uses it
+	Graphics::ManagedSurface _image;	// the cached picture, or a saved one
 	Common::Array<ScriptRect> _sources;
 	ScriptRect _dest;
 	uint32 _modColor = 0xFFFFFFFF;
@@ -342,8 +367,13 @@ protected:
 	bool setField(const Common::String &key) override;
 
 private:
+	// Nancy24: "VOICE", "MUSIC" or "EFFECTS", the volume the sound goes by
+	void readChannelType(int index);
+	const char *getChannelType() const;
+
 	Common::Array<Common::String> _names;
 	uint16 _channel;	// FX1 unless the table says otherwise
+	Common::String _channelType;	// empty for the one of the channel
 	double _volume = 1.0;
 	bool _isLooping = false;
 	bool _usesCaption = true;
@@ -366,6 +396,7 @@ public:
 	TextRecord(SceneContext &context) : Record(context, "ND.TextAR") {}
 
 	void updateGraphics() override;
+	void registerGraphics() override;
 
 	// Shows the next letter of a text that isn't shown at once, along with the
 	// markup in front of it. Returns false when there is nothing left to show.
@@ -411,6 +442,8 @@ public:
 	MovieRecord(SceneContext &context) : Record(context, "ND.Movie") {}
 
 	void updateGraphics() override;
+	void registerGraphics() override;
+	void describeState(Common::Array<Common::String> &lines) const override;
 	bool isSkippable() const override;
 
 	void setPaused(bool isPaused) { _isPaused = isPaused; }
@@ -421,6 +454,7 @@ protected:
 	void run(double sceneTime, double elapsedTime) override;
 	void onZChanged() override;
 	bool prepareReset() override;
+	bool isPaused() const override { return _isPaused; }
 	bool hasTransform() const override { return true; }
 	void onTransformChanged() override { applyPosition(); }
 	bool getField(const Common::String &key) override;
@@ -428,8 +462,9 @@ protected:
 
 private:
 	bool isSeeThrough() const;
+	// The movie is at another frame, or shows another part of it
 	void drawFrame();
-	void applyPosition() { drawFrame(); }
+	void applyPosition();
 
 	Common::String _name;
 	MoviePlayer _player;
@@ -438,8 +473,10 @@ private:
 	ScriptRect _dest;
 	uint32 _modColor = 0xFFFFFFFF;	// what the colors of the frames get multiplied with
 
-	// What a turned, resized or colored frame gets drawn from
+	// What a turned, resized or colored frame gets drawn from. It is kept while
+	// the movie stays at the frame, for the transform to move it around.
 	Graphics::ManagedSurface _frame;
+	bool _hasFrame = false;
 
 	int _numLoops = 1;		// 0 for forever
 	int _numPlayed = 0;

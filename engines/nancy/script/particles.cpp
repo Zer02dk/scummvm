@@ -238,7 +238,9 @@ private:
 	bool _isAngle;
 };
 
-// "color": the "base" color the image gets multiplied with
+// "color": the "base" color the image gets multiplied with. From Nancy25 on,
+// its red, green and blue are scaled by a random factor between "min" and
+// "max" for each particle.
 class ParticleColorStage : public ParticleStage {
 public:
 	ParticleColorStage(ParticleRecord &record, lua_State *L, int tableIndex) : ParticleStage(record) {
@@ -247,17 +249,36 @@ public:
 			_color = checkColor(L, -1);
 			lua_pop(L, 1);
 		}
+
+		_isScaled = g_nancy->getGameType() >= kGameTypeNancy25;
+		if (_isScaled) {
+			readField(L, tableIndex, "min", _min);
+			readField(L, tableIndex, "max", _max);
+		}
 	}
 
 protected:
 	void initParticles(uint first, uint count) override {
 		for (uint i = first; i < first + count; ++i) {
-			_record.getParticle(i).color = _color;
+			_record.getParticle(i).color = _isScaled ? getScaledColor() : _color;
 		}
 	}
 
 private:
+	// Like the original, the factor is converted to 0-255 and the result is
+	// divided by 256
+	uint32 getScaledColor() const {
+		const uint32 factor = (uint32)(int32)(lerp(_min, _max, randomFraction()) * 255.0);
+		const uint32 red = ((_color >> 16) & 0xFF) * factor >> 8;
+		const uint32 green = ((_color >> 8) & 0xFF) * factor >> 8;
+		const uint32 blue = (_color & 0xFF) * factor >> 8;
+		return (_color & 0xFF000000) | (red & 0xFF) << 16 | (green & 0xFF) << 8 | (blue & 0xFF);
+	}
+
 	uint32 _color = 0xFFFFFFFF;
+	bool _isScaled = false;
+	double _min = 1.0;
+	double _max = 1.0;
 };
 
 // "sources": the parts of the image to pick from, as a list of rects
@@ -486,6 +507,36 @@ public:
 		readVectorField(L, tableIndex, "max", _max, 3);
 	}
 
+	// Nancy25: scripts can read and change "min" and "max", the range of
+	// positions the particles start at
+	bool getField(lua_State *L, const Common::String &key) override {
+		const double *corner = getCorner(key);
+		if (!corner) {
+			return false;
+		}
+
+		pushVector(L, ScriptVector(corner[0], corner[1], corner[2]));
+		return true;
+	}
+
+	bool setField(lua_State *L, const Common::String &key) override {
+		double *corner = getCorner(key);
+		if (!corner) {
+			return false;
+		}
+
+		const ScriptVector *vector = testVector(L, -1);
+		if (!vector) {
+			luaL_typerror(L, -1, "Vector");
+		}
+
+		for (int i = 0; i < 3; ++i) {
+			corner[i] = vector->v[i];
+		}
+
+		return true;
+	}
+
 protected:
 	void initParticles(uint first, uint count) override {
 		for (uint i = first; i < first + count; ++i) {
@@ -494,6 +545,16 @@ protected:
 				particle.position[j] = lerp(_min[j], _max[j], randomFraction());
 			}
 		}
+	}
+
+	double *getCorner(const Common::String &key) {
+		if (key == "min") {
+			return _min;
+		} else if (key == "max") {
+			return _max;
+		}
+
+		return nullptr;
 	}
 
 private:
@@ -1019,6 +1080,12 @@ void registerParticleAPI(lua_State *L) {
 
 // The particles are drawn on a picture as large as the viewport, which is
 // started over every frame
+void ParticleRecord::registerGraphics() {
+	if (_canvas) {
+		_canvas->registerGraphics();
+	}
+}
+
 void ParticleRecord::updateGraphics() {
 	if (!isActive() || _count == 0) {
 		if (_canvas) {
@@ -1080,6 +1147,23 @@ static bool projectCorner(double x, double y, const ScriptMatrix &matrix, bool i
 	return point[2] >= 0.0 && point[2] <= point[3];
 }
 
+// Narrows the pixel range [first, last] of a row to the pixels x where
+// start + step * x is in [0, 1), with one pixel of margin on each side, as
+// each pixel is still tested on its own. Returns false if the range is empty.
+static bool narrowSpan(double start, double step, int &first, int &last) {
+	if (step == 0.0) {
+		return start >= 0.0 && start < 1.0;
+	}
+
+	const double atZero = -start / step;
+	const double atOne = (1.0 - start) / step;
+	const double low = CLIP<double>(floor(MIN(atZero, atOne)) - 1.0, first, last + 1.0);
+	const double high = CLIP<double>(ceil(MAX(atZero, atOne)) + 1.0, first - 1.0, last);
+	first = (int)low;
+	last = (int)high;
+	return first <= last;
+}
+
 // A particle is a square of a part of the image, sized, turned and moved into
 // place, then seen through the projection
 void ParticleRecord::drawParticle(const Particle &particle, const ScriptMatrix &transform) {
@@ -1128,46 +1212,76 @@ void ParticleRecord::drawParticle(const Particle &particle, const ScriptMatrix &
 	const int maxX = MIN<int>(target.w - 1, (int)ceil(MAX(MAX(x0, x1), MAX(x2, x3))));
 	const int minY = MAX<int>(0, (int)floor(MIN(MIN(y0, y1), MIN(y2, y3))));
 	const int maxY = MIN<int>(target.h - 1, (int)ceil(MAX(MAX(y0, y1), MAX(y2, y3))));
+	if (minX > maxX || minY > maxY) {
+		return;
+	}
 
+	// Both pictures are in the 32 bit format with alpha, so their pixels are read
+	// directly; that is a lot quicker for the thousands of particles of smoke
 	const Graphics::PixelFormat &format = target.format;
+	assert(format.bytesPerPixel == 4 && _image.format == format);
+
 	const uint32 colorA = particle.color >> 24;
 	const uint32 colorR = (particle.color >> 16) & 0xFF;
 	const uint32 colorG = (particle.color >> 8) & 0xFF;
 	const uint32 colorB = particle.color & 0xFF;
 
+	// Where the middle of a pixel is on the square, from 0 to 1 across and
+	// down, changes by the same amount from one pixel to the next
+	const double inverse = 1.0 / determinant;
+	const double acrossStepX = by * inverse;
+	const double downStepX = -ay * inverse;
+
+	const double uScale = (particle.right - particle.left) * _image.w;
+	const double vScale = (particle.bottom - particle.top) * _image.h;
+	const double uStart = particle.left * _image.w;
+	const double vStart = particle.top * _image.h;
+
 	for (int y = minY; y <= maxY; ++y) {
-		for (int x = minX; x <= maxX; ++x) {
-			// Where the middle of the pixel is on the square, from 0 to 1 across
-			const double px = x + 0.5 - x0;
-			const double py = y + 0.5 - y0;
-			const double across = (px * by - py * bx) / determinant;
-			const double down = (ax * py - ay * px) / determinant;
+		const double px = minX + 0.5 - x0;
+		const double py = y + 0.5 - y0;
+		double across = (px * by - py * bx) * inverse;
+		double down = (ax * py - ay * px) * inverse;
+
+		// The pixels of the row that a turned square covers
+		int first = 0;
+		int last = maxX - minX;
+		if (!narrowSpan(across, acrossStepX, first, last) || !narrowSpan(down, downStepX, first, last)) {
+			continue;
+		}
+
+		across += acrossStepX * first;
+		down += downStepX * first;
+
+		uint32 *row = (uint32 *)target.getBasePtr(0, y);
+		for (int x = minX + first; x <= minX + last; ++x, across += acrossStepX, down += downStepX) {
 			if (across < 0.0 || across >= 1.0 || down < 0.0 || down >= 1.0) {
 				continue;
 			}
 
-			const int u = CLIP<int>((int)(lerp(particle.left, particle.right, across) * _image.w), 0, _image.w - 1);
-			const int v = CLIP<int>((int)(lerp(particle.top, particle.bottom, down) * _image.h), 0, _image.h - 1);
+			const int u = CLIP<int>((int)(uStart + uScale * across), 0, _image.w - 1);
+			const int v = CLIP<int>((int)(vStart + vScale * down), 0, _image.h - 1);
+			const uint32 source = *(const uint32 *)_image.getBasePtr(u, v);
 
-			uint8 a, r, g, b;
-			format.colorToARGB(_image.getPixel(u, v), a, r, g, b);
-
-			const uint32 alpha = a * colorA / 255;
+			const uint32 alpha = ((source >> format.aShift) & 0xFF) * colorA / 255;
 			if (alpha == 0) {
 				continue;
 			}
 
-			uint8 da, dr, dg, db;
-			format.colorToARGB(target.getPixel(x, y), da, dr, dg, db);
+			const uint32 destination = row[x];
+			const uint32 da = (destination >> format.aShift) & 0xFF;
+			const uint32 dr = (destination >> format.rShift) & 0xFF;
+			const uint32 dg = (destination >> format.gShift) & 0xFF;
+			const uint32 db = (destination >> format.bShift) & 0xFF;
 
-			const uint32 sr = r * colorR / 255;
-			const uint32 sg = g * colorG / 255;
-			const uint32 sb = b * colorB / 255;
+			const uint32 sr = ((source >> format.rShift) & 0xFF) * colorR / 255;
+			const uint32 sg = ((source >> format.gShift) & 0xFF) * colorG / 255;
+			const uint32 sb = ((source >> format.bShift) & 0xFF) * colorB / 255;
 			const uint32 outA = alpha + da * (255 - alpha) / 255;
 			const uint32 outR = (sr * alpha + dr * (255 - alpha)) / 255;
 			const uint32 outG = (sg * alpha + dg * (255 - alpha)) / 255;
 			const uint32 outB = (sb * alpha + db * (255 - alpha)) / 255;
-			target.setPixel(x, y, format.ARGBToColor(outA, outR, outG, outB));
+			row[x] = (outA << format.aShift) | (outR << format.rShift) | (outG << format.gShift) | (outB << format.bShift);
 		}
 	}
 }
