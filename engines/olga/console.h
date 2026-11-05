@@ -31,6 +31,8 @@ private:
 	bool Cmd_room(int argc, const char **argv);
 	bool Cmd_flag(int argc, const char **argv);
 	bool Cmd_give(int argc, const char **argv);
+	bool Cmd_score(int argc, const char **argv);
+	bool Cmd_solve(int argc, const char **argv);
 public:
 	Console();
 	~Console() override;

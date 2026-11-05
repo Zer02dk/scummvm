@@ -126,6 +126,8 @@ private:
 	LbmImage _arrowImages[2];
 	LbmImage _icons[18];    // 1..17
 	LbmImage _okImage;      // 19c0:0db3
+	LbmImage _speedImages[4]; // Kort, Mellem, Lang, OK
+	LbmImage _quitImages[3];  // Afslut, Forfra, Fortsæt
 
 	// KemSkab (overlay 52ee)
 	struct KemItem {
@@ -228,6 +230,24 @@ private:
 	bool gotoBordStol(int number);
 	void bordSelect(int choice);
 	void bordClick(const Common::Point &p);
+	bool gotoTextSpeed();
+	void drawSpeedButtons();
+	void textSpeedClick(const Common::Point &p);
+	bool gotoQuitMenu();
+	void quitMenuClick(const Common::Point &p);
+	bool gotoGameEnd();
+	void gameEndDone();
+	/** Where the current location's room view is on the screen. */
+	Common::Point roomViewPos() const;
+
+	/** Main_NewGame's state: ObjNames_InitStates, empty inventory. */
+	void resetGame();
+	/** The handlers' method 12 summed over 100..231 (20 = all solved). */
+	int score() const;
+	/** F5, Responses_0590. */
+	void showStatus();
+	/** Situations_54d6: the ENTRE front door 194. */
+	void endCheck();
 
 protected:
 	Common::Error run() override;
@@ -257,6 +277,7 @@ public:
 
 	// Debugger (console.cpp)
 	uint32 getFlag(int id) const { return _flags[id]; }
+	int getScore() const { return score(); }
 	void setFlag(int id, uint32 value) { _flags[id] = value; refresh(id); }
 	/** Thing_Tag without the walk: carried and in the inventory. */
 	void giveThing(int id) { _flags[id] |= 1; refresh(id); addToInventory(id); }

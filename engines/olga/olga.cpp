@@ -40,14 +40,25 @@ OlgaEngine::OlgaEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engin
 	_gameDescription(gameDesc), _randomSource("Olga") {
 	g_engine = this;
 	_scene.setListener(this);
-	// ObjNames_InitStates (21b9:045a): the state at a new game
-	memset(_flags, 0, sizeof(_flags));
 	memset(_controlOff, 0, sizeof(_controlOff));
-	for (uint i = 0; i < ARRAYSIZE(kStates); i++)
-		_flags[kStates[i].id] = kStates[i].flags;
+	resetGame();
 	for (int n = 0; n < kNumLocations; n++)
 		for (int e = 0; e < kMaxEntries; e++)
 			_entries[n][e] = { kLocations[n].entries[e].x, kLocations[n].entries[e].y };
+}
+
+void OlgaEngine::resetGame() {
+	// Main_NewGame (1000:1854): ObjNames_InitStates (21b9:045a) sets the
+	// states, the inventory is empty, DS:2590 = 1 (the devil's first text)
+	memset(_flags, 0, sizeof(_flags));
+	for (uint i = 0; i < ARRAYSIZE(kStates); i++)
+		_flags[kStates[i].id] = kStates[i].flags;
+	for (int i = 0; i <= kLastId; i++)
+		_names[i].clear();
+	_inventory.clear();
+	_inventoryRow = 1;
+	_devilFirst = true;
+	_pendingDevil = _pendingPraise = false;
 }
 
 OlgaEngine::~OlgaEngine() {
@@ -71,6 +82,14 @@ bool OlgaEngine::loadExeData() {
 			return false;
 	// The OK button of KemSkab and BordStol, the image before Skub
 	if (!_exe.readBitmap(0x19c0, 0x0db3, _okImage))
+		return false;
+	// SkiftTid: Kort, Mellem, Lang, OK (19c0:0005 + 0x200 * k); the quit
+	// menu: Afslut, Forfra, Fortsæt
+	for (int k = 0; k < 4; k++)
+		if (!_exe.readBitmap(0x19c0, 0x0005 + 0x200 * k, _speedImages[k]))
+			return false;
+	if (!_exe.readBitmap(0x19c0, 0x1fdd, _quitImages[0]) || !_exe.readBitmap(0x19c0, 0x21ff, _quitImages[1]) ||
+		!_exe.readBitmap(0x19c0, 0x0805, _quitImages[2]))
 		return false;
 	// Inventory arrows (InvPanel_Init) and the 17 icons of 23x18 (unit Icons)
 	if (!_exe.readBitmap(0x1c51, 0x0507, _arrowImages[0]) || !_exe.readBitmap(0x1c51, 0x059d, _arrowImages[1]))
@@ -131,11 +150,10 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	if (number < 1 || number > kNumLocations)
 		return false;
 	LocationDef loc = kLocations[number - 1];
-	// The return set {11, 23, 25..29, 32, 33} (1000:02a6, tested at 03e3):
-	// the room is kept to go back to
-	static const int kReturnSet[] = { 11, 23, 25, 26, 27, 28, 29, 32, 33 };
-	for (uint i = 0; i < ARRAYSIZE(kReturnSet); i++)
-		if (number == kReturnSet[i] && _kind == kLocRoom && _location)
+	// The return set (1000:02a6, tested at 03e3): the room is kept to go
+	// back to
+	for (uint i = 0; i < ARRAYSIZE(kReturnLocations); i++)
+		if (number == kReturnLocations[i] && _kind == kLocRoom && _location)
 			_returnLocation = _location;
 	if (loc.kind == kLocPopup)
 		return gotoPopup(number);
@@ -143,6 +161,12 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 		return gotoKemSkab();
 	if (loc.kind == kLocBordStol)
 		return gotoBordStol(number);
+	if (loc.kind == kLocTextSpeed)
+		return gotoTextSpeed();
+	if (loc.kind == kLocQuitMenu)
+		return gotoQuitMenu();
+	if (loc.kind == kLocGameEnd)
+		return gotoGameEnd();
 	if (loc.kind != kLocRoom)
 		return false;
 	for (int e = 0; e < kMaxEntries; e++) {
@@ -252,13 +276,24 @@ Common::Error OlgaEngine::run() {
 					kemClick(e.mouse);
 				} else if (_kind == kLocBordStol) {
 					bordClick(e.mouse);
-				} else {
+				} else if (_kind == kLocTextSpeed) {
+					textSpeedClick(e.mouse);
+				} else if (_kind == kLocQuitMenu) {
+					quitMenuClick(e.mouse);
+				} else if (_kind == kLocRoom) {
 					onClick(e.mouse);
 				}
 				break;
 			case Common::EVENT_KEYDOWN:
-				if (_inputEnabled && _kind == kLocRoom)
+				if (_kind == kLocGameEnd)
+					gameEndDone(); // GameEnd_02a9: any key
+				else if (_inputEnabled && _kind == kLocRoom)
 					onKey(e.kbd);
+				else if (_inputEnabled && (_kind == kLocTextSpeed || _kind == kLocQuitMenu) &&
+						 e.kbd.keycode == Common::KEYCODE_ESCAPE)
+					// Not in the original (SkiftTid_04f8 only ends the text, the
+					// quit menu has no Esc): Esc is OK / Fortsæt
+					setExit(_returnLocation, 1);
 				break;
 			default:
 				break;
@@ -267,14 +302,17 @@ Common::Error OlgaEngine::run() {
 		// One frame of the room view's idle method (Room_021e)
 		if (_textTimer > 0 && --_textTimer == 0)
 			clearText();
-		// BordStol has no scene: it draws on the screen once
-		if (_kind != kLocBordStol)
+		// BordStol and the quit menu have no scene: they draw on the screen
+		// once
+		bool scene = _kind != kLocBordStol && _kind != kLocQuitMenu;
+		if (scene)
 			_scene.tick();
 		if (_nextLocation)
 			leaveRoom();
-		if (_kind != kLocBordStol) {
+		scene = _kind != kLocBordStol && _kind != kLocQuitMenu;
+		if (scene) {
 			_scene.draw(_roomView);
-			_screen->blitFrom(_roomView, _kind == kLocPopup ? Common::Point(4, 14) : Common::Point(0, kRoomTop));
+			_screen->blitFrom(_roomView, roomViewPos());
 		}
 		_screen->update();
 		uint32 used = g_system->getMillis() - start;

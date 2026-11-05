@@ -164,6 +164,8 @@ void OlgaEngine::handleEvent(const SceneEvent &e) {
 	// the situations
 	if (_kind == kLocKemSkab) {
 		kemEvent(e);
+	} else if (_kind == kLocGameEnd) {
+		gameEndDone(); // GameEnd_02a9: any room event
 	} else if (e.code == kEventArrived) {
 		if (_pending && e.object == _scene.olgaIndex()) {
 			_pending = false;
@@ -392,7 +394,11 @@ void OlgaEngine::goThrough(int id) {
 			return;
 		}
 	}
-	// 194, the front door's end-of-game check, is not implemented yet
+	// 194, the ENTRE front door: the end-of-game check (method 13)
+	if (id == 194) {
+		endCheck();
+		return;
+	}
 	verbBase(kVerbBrug);
 }
 

@@ -327,4 +327,184 @@ void OlgaEngine::bordClick(const Common::Point &p) {
 	setExit(_returnLocation, 1);
 }
 
+Common::Point OlgaEngine::roomViewPos() const {
+	switch (_kind) {
+	case kLocPopup:
+		return Common::Point(4, 14);
+	case kLocTextSpeed:
+		return Common::Point(0x5e, 0x29);
+	case kLocGameEnd:
+		return Common::Point(0, 0x12);
+	default:
+		return Common::Point(0, kRoomTop);
+	}
+}
+
+namespace {
+
+// SkiftTid_0297: Kort, Mellem, Lang (commands 0x46..0x48, DS:27a4 = 3, 6,
+// 9) at y 163, and OK (0x49) below
+const Common::Point kSpeedPos[4] = {
+	Common::Point(0x52, 0xa3), Common::Point(0x88, 0xa3), Common::Point(0xbe, 0xa3), Common::Point(0x88, 0xb5)
+};
+const int kSpeeds[3] = { 3, 6, 9 };
+
+// QuitMenu_0209: Afslut (10), Forfra (11), Fortsæt (12) at x 33
+const int kQuitY[3] = { 0x3d, 0x4f, 0x61 };
+
+void frame3D(Graphics::Screen &s, int x, int y, int w, int h) {
+	// Frame3D_Draw (1212:0000)
+	s.frameRect(Common::Rect(x, y, x + w, y + h), 8);
+	s.frameRect(Common::Rect(x + 1, y + 1, x + w + 1, y + h + 1), 15);
+	s.setPixel(x + 1, y + h - 1, 7);
+	s.setPixel(x + w - 1, y + 1, 7);
+}
+
+} // End of anonymous namespace
+
+bool OlgaEngine::gotoTextSpeed() {
+	// SkiftTid_0032: a room view (94, 41)-(223, 155) with skifttid.lbm /
+	// .scn and the small Olga, placed at 35, 26 (method +4, x pushed
+	// first) without her animation offset: centred (checked by the user)
+	LocationDef def = kLocations[11 - 1];
+	def.lbm = "SKIFTTID.LBM";
+	def.scn = "SKIFTTID.SCN";
+	def.spriteLbm = "OLGA_SS.LBM";
+	def.prs = "OLGA_SS.PRS";
+	def.numEntries = 1;
+	def.entries[0].x = 0x23;
+	def.entries[0].y = 0x1a;
+	if (!_scene.load(def, 1))
+		return false;
+	_location = 11;
+	_kind = kLocTextSpeed;
+	_nextLocation = 0;
+	_pending = false;
+	_textTimer = 0;
+	_scene.settle();
+	g_system->getPaletteManager()->setPalette(_scene.palette(), 0, 256);
+	_roomView.create(130, 115, Graphics::PixelFormat::createFormatCLUT8());
+
+	// SkiftTid_0142 (Room_Init clears the screen first)
+	_screen->clear(0);
+	_screen->fillRect(Common::Rect(0x30, 8, 0x10f, 200), 7);
+	frame3D(*_screen, 0x31, 9, 0xdc, 0xbd);
+	_screen->hLine(0x33, 0x24, 0x10b, 8);
+	_screen->hLine(0x33, 0x25, 0x10b, 15);
+	_screen->frameRect(Common::Rect(0x5d, 0x28, 0xe1, 0x9e), 0);
+	_font.drawString(*_screen, _exe.readString(0x528f, 0x011a), 0x4b, 0xf, 1);
+	_font.drawString(*_screen, _exe.readString(0x528f, 0x0130), 0x5d, 0x1a, 1);
+	drawSpeedButtons();
+	setInput(true);
+	return true;
+}
+
+void OlgaEngine::drawSpeedButtons() {
+	// The three are a group like the verbs (Gui1cb5): the current one stays
+	// pressed (SkiftTid_0297 selects it from DS:27a4)
+	for (int k = 0; k < 4; k++)
+		drawButton(_speedImages[k], kSpeedPos[k].x, kSpeedPos[k].y, k < 3 && kSpeeds[k] == _textSpeed);
+}
+
+void OlgaEngine::textSpeedClick(const Common::Point &p) {
+	// SkiftTid_0412 / 039e: the speed, and "Dette er <kort> taletid." with
+	// Olga talking; OK ends
+	static const uint16 kNames[3] = { 0x0401, 0x0406, 0x040d };
+	for (int k = 0; k < 4; k++) {
+		if (!buttonArea(_speedImages[k], kSpeedPos[k], 1).contains(p))
+			continue;
+		if (k == 3) {
+			setExit(_returnLocation, 1);
+			return;
+		}
+		_textSpeed = kSpeeds[k];
+		drawSpeedButtons();
+		say(_exe.readString(0x528f, 0x038a) + _exe.readString(0x528f, kNames[k]) + _exe.readString(0x528f, 0x0394));
+		return;
+	}
+}
+
+bool OlgaEngine::gotoQuitMenu() {
+	// QuitMenu_0000 / 0291: a box over the last picture
+	_location = 27;
+	_kind = kLocQuitMenu;
+	_nextLocation = 0;
+	_pending = false;
+	_textTimer = 0;
+	_screen->frameRect(Common::Rect(0x15, 0x20, 0x12b, 0x77), 0);
+	_screen->fillRect(Common::Rect(0x16, 0x21, 0x12a, 0x76), 7);
+	frame3D(*_screen, 0x17, 0x22, 0x111, 0x52);
+	_screen->hLine(0x18, 0x34, 0x127, 8);
+	_screen->hLine(0x18, 0x35, 0x127, 15);
+	_font.drawCentred(*_screen, _exe.readString(0x50a7, 0x0281), 0x29, 1);
+	// QuitMenu_0137: each button with its text and "." at x 105, colour 5
+	static const uint16 kTexts[3] = { 0x01cd, 0x01df, 0x01f6 };
+	for (int k = 0; k < 3; k++) {
+		drawButton(_quitImages[k], 0x21, kQuitY[k], false);
+		_font.drawString(*_screen, _exe.readString(0x50a7, kTexts[k]) + ".", 0x69, kQuitY[k] + 1, 5);
+	}
+	setInput(true);
+	return true;
+}
+
+void OlgaEngine::quitMenuClick(const Common::Point &p) {
+	// QuitMenu_006b: 10 quits (DS:2181), 11 starts again (DS:2180), 12 goes
+	// back
+	for (int k = 0; k < 3; k++) {
+		if (!buttonArea(_quitImages[k], Common::Point(0x21, kQuitY[k]), 1).contains(p))
+			continue;
+		if (k == 0) {
+			quitGame();
+		} else if (k == 1) {
+			// Main_NewGame: GANG5, entry 3
+			resetGame();
+			_returnLocation = 0;
+			setExit(kStartLocation, kStartEntry);
+		} else {
+			setExit(_returnLocation, 1);
+		}
+		return;
+	}
+}
+
+bool OlgaEngine::gotoGameEnd() {
+	// GameEnd_00ca: a room view (0, 18)-(319, 155) with spilslut.lbm / .scn,
+	// no Olga, three texts, no input
+	LocationDef def = kLocations[34 - 1];
+	def.lbm = "SPILSLUT.LBM";
+	def.scn = "SPILSLUT.SCN";
+	if (!_scene.load(def, 0))
+		return false;
+	_location = 34;
+	_kind = kLocGameEnd;
+	_nextLocation = 0;
+	_pending = false;
+	_textTimer = 0;
+	memset(_controlOff, 0, sizeof(_controlOff));
+	for (uint i = 0; i < _scene.scn().objects.size(); i++)
+		refresh(_scene.scn().objects[i].hotspot.id);
+	_scene.settle();
+	g_system->getPaletteManager()->setPalette(_scene.palette(), 0, 256);
+	_roomView.create(kRoomWidth, kRoomHeight, Graphics::PixelFormat::createFormatCLUT8());
+	_screen->clear(0);
+	_font.drawCentred(*_screen, _exe.readString(0x5000, 0x0062), 0, 14);
+	_font.drawCentred(*_screen, _exe.readString(0x5000, 0x0087), 9, 14);
+	_font.drawCentred(*_screen, _exe.readString(0x5000, 0x00a5), 0xaa, 11);
+	setInput(false);
+	// GameEnd_01de: the first object plays for 65 * text speed / 3 steps,
+	// then event 200
+	SceneObject *o = _scene.findObject(_scene.scn().objects[0].hotspot.id);
+	if (o) {
+		SceneObject::Move m = { 0, 0, 1, 65 * _textSpeed / 3 };
+		o->moves.push_back(m);
+		_scene.startScript(*o, 200);
+	}
+	return true;
+}
+
+void OlgaEngine::gameEndDone() {
+	// GameEnd_0264: any room event or key: SetExit(0), the game ends
+	quitGame();
+}
+
 } // End of namespace Olga

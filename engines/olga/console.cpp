@@ -28,6 +28,26 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("room", WRAP_METHOD(Console, Cmd_room));
 	registerCmd("flag", WRAP_METHOD(Console, Cmd_flag));
 	registerCmd("give", WRAP_METHOD(Console, Cmd_give));
+	registerCmd("score", WRAP_METHOD(Console, Cmd_score));
+	registerCmd("solve", WRAP_METHOD(Console, Cmd_solve));
+}
+
+bool Console::Cmd_score(int argc, const char **argv) {
+	debugPrintf("Score %d of 20\n", g_engine->getScore());
+	return true;
+}
+
+bool Console::Cmd_solve(int argc, const char **argv) {
+	// The solved state of each of the 20 situations (notes/situations.md)
+	static const struct { int id; uint32 value; } kSolved[] = {
+		{ 104, 4 }, { 108, 1 }, { 205, 1 }, { 127, 1 }, { 202, 4 }, { 140, 1 }, { 128, 2 },
+		{ 164, 2 }, { 186, 2 }, { 171, 3 }, { 174, 1 }, { 185, 1 }, { 188, 1 }, { 192, 2 },
+		{ 200, 1 }, { 217, 2 }, { 218, 2 }, { 219, 1 }, { 225, 1 }, { 226, 1 }
+	};
+	for (uint i = 0; i < ARRAYSIZE(kSolved); i++)
+		g_engine->setFlag(kSolved[i].id, kSolved[i].value);
+	debugPrintf("Score %d of 20\n", g_engine->getScore());
+	return true;
 }
 
 bool Console::Cmd_flag(int argc, const char **argv) {

@@ -123,6 +123,66 @@ void OlgaEngine::setInput(bool enabled) {
 	setCursor(enabled ? 0x134e : 0x138e);
 }
 
+int OlgaEngine::score() const {
+	// Method 12 of every handler (1222:0963 .. 66b0, notes/situations.md):
+	// +1 for each solved situation, -1 for the five penalties; 219, 220,
+	// 224, 225 and 226 return their state word
+	static const struct {
+		int id;
+		uint32 mask, value;
+		int points;
+	} kScores[] = {
+		{ 104, 4, 4, 1 }, { 108, 1, 1, 1 }, { 205, 1, 1, 1 }, { 127, 1, 1, 1 },
+		{ 202, 4, 4, 1 }, { 128, 2, 2, 1 }, { 164, 2, 2, 1 }, { 186, 6, 2, 1 },
+		{ 171, 7, 3, 1 }, { 174, 1, 1, 1 }, { 185, 1, 1, 1 }, { 188, 3, 1, 1 },
+		{ 192, 2, 2, 1 }, { 200, 1, 1, 1 }, { 217, 2, 2, 1 }, { 218, 2, 2, 1 },
+		{ 102, 1, 1, -1 }, { 126, 1, 1, -1 }, { 173, 2, 2, -1 }, { 197, 1, 1, -1 },
+		{ 201, 1, 1, -1 }
+	};
+	int total = 0;
+	for (uint i = 0; i < ARRAYSIZE(kScores); i++)
+		if ((_flags[kScores[i].id] & kScores[i].mask) == kScores[i].value)
+			total += kScores[i].points;
+	if (_flags[140] != 0) // the wall in GANG6: any picture
+		total++;
+	static const int kRaw[] = { kIdKids2, kIdKids2b, kIdPupils, kIdPupil1, kIdPupil2 };
+	for (uint i = 0; i < ARRAYSIZE(kRaw); i++)
+		total += (int16)(_flags[kRaw[i]] & 0xffff);
+	return total;
+}
+
+void OlgaEngine::showStatus() {
+	// Responses_0590 (F5): Olga stops walking (the pending verb stays), then
+	// the count
+	SceneObject *olga = _scene.olga();
+	if (_pending && olga) {
+		Scene::stopScript(*olga);
+		Scene::setAnim(*olga, 1);
+	}
+	int n = score();
+	if (n == 20) {
+		sayExe(kSegResponses, 0x051a);
+	} else if (n == 19 && carried(kIdBucket)) {
+		sayExe(kSegResponses, 0x053f);
+	} else {
+		Common::String text = _exe.readString(kSegResponses, 0x0567) + Common::String::format("%d", 20 - n) +
+			_exe.readString(kSegResponses, n == 19 ? 0x0580 : 0x0587);
+		say(text);
+	}
+}
+
+void OlgaEngine::endCheck() {
+	// Situations_54d6: with the door open, 20 ends the game (GameEnd,
+	// location 34 entry 2)
+	int n = score();
+	if (n == 20)
+		setExit(34, 2);
+	else if (n == 19 && carried(kIdBucket))
+		sayExe(kSeg, 0x548d);
+	else
+		sayExe(kSeg, 0x54b5);
+}
+
 void OlgaEngine::showDevil() {
 	_flags[kIdDevil] = 1;
 	refresh(kIdDevil);

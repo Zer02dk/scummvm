@@ -260,6 +260,21 @@ void OlgaEngine::onKey(const Common::KeyState &ks) {
 		cancelWalk();
 		return;
 	}
+	// Responses_087d: F4 SkiftTid (11), F5 the status, F10 the quit menu
+	// (27); F2 / F3 save and load are not done yet
+	switch (ks.keycode) {
+	case Common::KEYCODE_F4:
+		setExit(11, 1);
+		return;
+	case Common::KEYCODE_F5:
+		showStatus();
+		return;
+	case Common::KEYCODE_F10:
+		setExit(27, 1);
+		return;
+	default:
+		break;
+	}
 	if (ks.ascii == 0xe5 || ks.ascii == 0xc5) { // å / Å: Åben
 		if (_pending)
 			cancelWalk();
