@@ -387,6 +387,12 @@ void SoundManager::loadSound(const SoundDescription &description, SoundEffectDes
 }
 
 void SoundManager::playSound(uint16 channelID) {
+	if (channelID < _channels.size()) {
+		playSound(channelID, _channels[channelID].type);
+	}
+}
+
+void SoundManager::playSound(uint16 channelID, Audio::Mixer::SoundType type) {
 	if (channelID >= _channels.size() || _channels[channelID].stream == nullptr || isSoundPlaying(channelID))
 		return;
 
@@ -444,7 +450,7 @@ void SoundManager::playSound(uint16 channelID) {
 		}
 	}
 
-	_mixer->playStream(	chan.type,
+	_mixer->playStream(	type,
 						&chan.handle,
 						chan.streamForMixer,
 						channelID,
@@ -751,6 +757,23 @@ Audio::Timestamp SoundManager::getLength(const SoundDescription &description) {
 
 Audio::Timestamp SoundManager::getLength(const Common::String &chunkName) {
 	return getLength(_commonSounds[chunkName]);
+}
+
+Audio::Timestamp SoundManager::getFileLength(const Common::String &soundName) {
+	if (soundName == "silence") {
+		return Audio::Timestamp();
+	}
+
+	Common::SeekableReadStream *file = SearchMan.createReadStreamForMember(Common::Path(soundName + ".his"));
+	if (!file) {
+		return Audio::Timestamp();
+	}
+
+	Audio::SeekableAudioStream *stream = makeHISStream(file, DisposeAfterUse::NO);
+	const Audio::Timestamp length = stream ? stream->getLength() : Audio::Timestamp();
+	delete stream;
+	delete file;
+	return length;
 }
 
 void SoundManager::recalculateSoundEffects() {

@@ -70,6 +70,8 @@ public:
 
 	void playSound(uint16 channelID);
 	void playSound(const SoundDescription &description);
+	// Nancy24 scripts can pick the volume a sound goes by, whatever its channel
+	void playSound(uint16 channelID, Audio::Mixer::SoundType type);
 	void playSound(const Common::String &chunkName);
 
 	void pauseSound(uint16 channelID, bool pause);
@@ -130,6 +132,8 @@ public:
 	Audio::Timestamp getLength(uint16 channelID);
 	Audio::Timestamp getLength(const SoundDescription &description);
 	Audio::Timestamp getLength(const Common::String &chunkName);
+	// How long the sound file plays, without loading it into a channel
+	Audio::Timestamp getFileLength(const Common::String &soundName);
 
 	bool isCommonSound(const Common::String &soundName) const { return _commonSounds.contains(soundName); }
 

@@ -296,6 +296,18 @@ bool SceneStream::loadScene() {
 	return true;
 }
 
+void SceneStream::registerGraphics() {
+	if (_background) {
+		_background->registerGraphics();
+	}
+
+#ifdef ENABLE_NANCY_V4
+	if (_scriptScene) {
+		_scriptScene->registerGraphics();
+	}
+#endif
+}
+
 void SceneStream::endScene() {
 #ifdef ENABLE_NANCY_V4
 	if (_scriptScene) {
@@ -427,6 +439,17 @@ double SceneStreamManager::getZ(const Common::String &name) const {
 	return stream ? stream->getZOffset() : 0.0;
 }
 
+int32 SceneStreamManager::getFrontZOffset() const {
+	int32 front = 0;
+	for (const SceneStream *stream : _streams) {
+		if (stream && !stream->isEnded()) {
+			front = MAX(front, stream->getZOffset());
+		}
+	}
+
+	return front;
+}
+
 void SceneStreamManager::getStreamNames(Common::Array<Common::String> &names, bool withUI) const {
 	if (withUI && find(kUIStreamName)) {
 		names.push_back(kUIStreamName);
@@ -475,6 +498,14 @@ void SceneStreamManager::begin(const Common::String &name, const Common::String 
 		_running->_children.push_back(child);
 	} else {
 		_mainStreamChildren.push_back(child);
+	}
+}
+
+void SceneStreamManager::registerGraphics() {
+	for (SceneStream *stream : _streams) {
+		if (stream) {
+			stream->registerGraphics();
+		}
 	}
 }
 
@@ -551,22 +582,37 @@ Common::String SceneStreamManager::getSceneName(const Common::String &name) cons
 	return stream ? stream->getSceneName() : Common::String();
 }
 
-double SceneStreamManager::getSceneTime(const Common::String &name) const {
 #ifdef ENABLE_NANCY_V4
-	const Script::SceneContext *scene = nullptr;
+const Script::SceneContext *SceneStreamManager::findScriptScene(const Common::String &name) const {
 	if (name.equalsIgnoreCase(kMainStreamName)) {
-		scene = NancySceneState.getScriptScene();
-	} else {
-		const SceneStream *stream = name.empty() ? _running : find(name);
-		scene = stream ? stream->getScriptScene() : nullptr;
+		return NancySceneState.getScriptScene();
 	}
 
+	const SceneStream *stream = name.empty() ? _running : find(name);
+	return stream ? stream->getScriptScene() : nullptr;
+}
+#endif
+
+double SceneStreamManager::getSceneTime(const Common::String &name) const {
+#ifdef ENABLE_NANCY_V4
+	const Script::SceneContext *scene = findScriptScene(name);
 	if (scene) {
 		return scene->getTime();
 	}
 #endif
 
 	return -1.0;
+}
+
+int SceneStreamManager::getSceneFrame(const Common::String &name) const {
+#ifdef ENABLE_NANCY_V4
+	const Script::SceneContext *scene = findScriptScene(name);
+	if (scene) {
+		return scene->getFrame();
+	}
+#endif
+
+	return -1;
 }
 
 // Nancy17 takes an item out of the inventory while its scene is up, in a stream

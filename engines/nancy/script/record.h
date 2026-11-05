@@ -136,6 +136,14 @@ public:
 	int getScriptField();
 	int setScriptField();
 
+	// What scripts stored in the record under a name, which the fields of its
+	// kind don't go through. AR:GetActualField (Nancy24) reads it.
+	void pushStoredValue(const char *name);
+
+	// Nancy24: clears everything scripts stored in the record, the function
+	// that says whether it is active as well
+	void clean();
+
 	// Calls a function a script stored in the record, with the record itself in
 	// front of the arguments on the stack. Returns false when there is no such
 	// function, or when it failed; no results are left then.
@@ -165,6 +173,10 @@ public:
 	// Shows or hides what the record draws, once the records of a frame have run
 	virtual void updateGraphics() {}
 
+	// Puts what the record draws back on the screen, after a change of the
+	// state of the engine took everything off it
+	virtual void registerGraphics() {}
+
 	// Enhancement: the player can skip what a scene plays. Whether the record is
 	// something that can be skipped, and what it does when the skipping begins.
 	virtual bool isSkippable() const { return false; }
@@ -181,6 +193,9 @@ public:
 
 	// For the debugger: what the scripts gave the record, as "name = value"
 	void describeFields(Common::Array<Common::String> &lines);
+
+	// For the console: what the kind of record is up to, beyond its fields
+	virtual void describeState(Common::Array<Common::String> &lines) const {}
 
 protected:
 	lua_State *getLua() const;
@@ -199,6 +214,9 @@ protected:
 	// Whether the record can start over, after getting itself ready for it
 	virtual bool prepareReset() { return false; }
 
+	// A paused record doesn't run at all, not even once, until it goes on
+	virtual bool isPaused() const { return false; }
+
 	// Whether the functions of the scripts take the place of what the record does
 	// by itself: Run, Render, and everything the player does
 	virtual bool isScripted() const { return false; }
@@ -216,8 +234,6 @@ protected:
 	virtual bool getField(const Common::String &key) { return false; }
 	virtual bool setField(const Common::String &key) { return false; }
 
-	// What scripts stored in the record
-	void pushStoredValue(const char *name);
 	void storeValue(const char *name);	// pops the value
 
 private:

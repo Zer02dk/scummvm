@@ -714,6 +714,7 @@ PauseToken Engine::pauseEngine() {
 	_pauseLevel++;
 
 	if (_pauseLevel == 1) {
+		suspendHotspots();
 		_pauseStartTime = _system->getMillis();
 		_pauseScreenChangeID = g_system->getScreenChangeID();
 		pauseEngineIntern(true);
@@ -753,19 +754,31 @@ void Engine::showHotspots(bool show) {
 	if (show) {
 		_hotspotForceRedraw = true;
 	} else {
+		suspendHotspots();
 		if (_hotspotRenderer)
 			_hotspotRenderer->releaseResources();
 		_hotspotScratch.resize(0);
-		if (_hotspotCursorHidden) {
-			CursorMan.showMouse(_hotspotPrevCursorVisible);
-			_hotspotCursorHidden = false;
-		}
-		if (g_system->isOverlayVisible())
-			g_system->hideOverlay();
 	}
 }
 
+void Engine::suspendHotspots() {
+	if (_hotspotRenderer)
+		_hotspotRenderer->hideOverlay(*_system);
+	if (_hotspotCursorHidden) {
+		CursorMan.showMouse(_hotspotPrevCursorVisible);
+		_hotspotCursorHidden = false;
+	}
+	_hotspotForceRedraw = true;
+}
+
 void Engine::getHotspotPositions(Common::Array<Graphics::HotspotInfo> &hotspots) {
+}
+
+HotspotKeyMode Engine::effectiveHotspotKeyMode() const {
+	const int mode = ConfMan.hasKey("hotspot_key_mode") ? ConfMan.getInt("hotspot_key_mode") : -1;
+	if (mode == kHotspotKeyModeHold || mode == kHotspotKeyModeToggle)
+		return (HotspotKeyMode)mode;
+	return hotspotsKeyMode();
 }
 
 bool Engine::hotspotDirty() const {
@@ -777,12 +790,14 @@ Graphics::HotspotRenderer *Engine::createHotspotRenderer() {
 }
 
 void Engine::drawHotspots() {
-	if (!_showHotspots)
+	if (!_showHotspots || isPaused() || g_gui.isActive())
 		return;
 	if (!_hotspotRenderer) {
 		_hotspotRenderer = createHotspotRenderer();
 		_hotspotForceRedraw = true;
 	}
+	if (_system->isOverlayVisible() && !_hotspotRenderer->ownsOverlay())
+		return;
 	if (hotspotDirty() || _hotspotForceRedraw) {
 		_hotspotScratch.resize(0);
 		getHotspotPositions(_hotspotScratch);
@@ -798,14 +813,13 @@ void Engine::drawHotspots() {
 		_hotspotMarker = marker == Graphics::kMarkerDefault ? Graphics::kMarkerDefault :
 			CLIP(marker, (int)Graphics::kMarkerCrosshair, (int)Graphics::kMarkerPoint);
 	}
-	if (_hotspotRenderer->empty()) {
-		if (_hotspotCursorHidden) {
-			CursorMan.showMouse(_hotspotPrevCursorVisible);
-			_hotspotCursorHidden = false;
-		}
-	} else if (!_hotspotCursorHidden && hideCursorForHotspots()) {
+	const bool shouldHideCursor = !_hotspotRenderer->empty() && hideCursorForHotspots();
+	if (shouldHideCursor && !_hotspotCursorHidden) {
 		_hotspotPrevCursorVisible = CursorMan.showMouse(false);
 		_hotspotCursorHidden = true;
+	} else if (!shouldHideCursor && _hotspotCursorHidden) {
+		CursorMan.showMouse(_hotspotPrevCursorVisible);
+		_hotspotCursorHidden = false;
 	}
 	_hotspotRenderer->renderOverlay(*_system, (Graphics::MarkerShape)_hotspotMarker, _hotspotShowText, _hotspotForceRedraw);
 	_hotspotForceRedraw = false;
