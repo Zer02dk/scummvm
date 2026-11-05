@@ -86,7 +86,9 @@ enum {
 	kVmtBucket = 0x0752, kVmtPaintCupboard = 0x0602, kVmtPaintGirl = 0x078a,
 	kVmtAlkyd = 0x07c2, kVmtAkryl = 0x07fa,
 	kVmtTeacher = 0x0e22, kVmtWetClothes = 0x0eca, kVmtKids2 = 0x0db2, kVmtPanes = 0x0e5a,
-	kVmtHook = 0x0e92, kVmtMegaphone = 0x0f02, kVmtPupil = 0x0dea
+	kVmtHook = 0x0e92, kVmtMegaphone = 0x0f02, kVmtPupil = 0x0dea,
+	// KemSkab's products 176..184
+	kVmtProduct = 0x063a
 };
 
 // Room events (Responses_RoomEvent 5427:1454)
@@ -422,6 +424,11 @@ bool OlgaEngine::refreshSituation(int id, SceneObject &o) {
 		// 3 when his own state says he sits right (BordStol)
 		setControl(id, _flags[kIdKids2] != 0);
 		Scene::setAnim(o, !_flags[kIdKids2] ? 1 : _flags[id] ? 3 : 2);
+		return true;
+	case kVmtProduct:
+		// 1222:2599: in the bin (bit 0) 2 with the hotspot off, else 1
+		Scene::setAnim(o, (f & 1) ? 2 : 1);
+		setControl(id, !(f & 1));
 		return true;
 	case kVmtPanes:
 		// 1222:6888: clear (2) when the jacket and the coat both hang
@@ -1262,6 +1269,28 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 			} else {
 				sayExe(kSeg, 0x62ae);
 			}
+		} else {
+			return false;
+		}
+		return true;
+	case kVmtPupil:
+		// 1222:6577 (Brug; Giv 6604 is Brug), 64e1 (Tal til), 640c (Se på):
+		// on the wrong furniture (state 0) Brug opens BordStol, 32 for 225
+		// and 33 for 226
+		if (verb == kVerbBrug || verb == kVerbGiv) {
+			if (_flags[id])
+				sayExe(kSeg, 0x655e, 0xe, true);
+			else
+				setExit(id == kIdPupil2 ? 33 : 32, 1);
+		} else if (verb == kVerbTalTil) {
+			if (_flags[id])
+				sayExe(kSeg, 0x64c8, 2, false);
+			else if (id == kIdPupil2)
+				sayExe(kSeg, 0x6489, 0xc, false);
+			else
+				sayExe(kSeg, 0x649f, 2, false);
+		} else if (verb == kVerbSePaa) {
+			sayExe(kSeg, _flags[id] ? 0x63f1 : id == kIdPupil2 ? 0x63b3 : 0x63d1);
 		} else {
 			return false;
 		}

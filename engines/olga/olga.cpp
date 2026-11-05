@@ -69,6 +69,9 @@ bool OlgaEngine::loadExeData() {
 	for (int k = 0; k < kNumVerbs; k++)
 		if (!_exe.readBitmap(0x19c0, 0x0f84 + 0x1d1 * k, _verbImages[k]))
 			return false;
+	// The OK button of KemSkab and BordStol, the image before Skub
+	if (!_exe.readBitmap(0x19c0, 0x0db3, _okImage))
+		return false;
 	// Inventory arrows (InvPanel_Init) and the 17 icons of 23x18 (unit Icons)
 	if (!_exe.readBitmap(0x1c51, 0x0507, _arrowImages[0]) || !_exe.readBitmap(0x1c51, 0x059d, _arrowImages[1]))
 		return false;
@@ -128,8 +131,18 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	if (number < 1 || number > kNumLocations)
 		return false;
 	LocationDef loc = kLocations[number - 1];
+	// The return set {11, 23, 25..29, 32, 33} (1000:02a6, tested at 03e3):
+	// the room is kept to go back to
+	static const int kReturnSet[] = { 11, 23, 25, 26, 27, 28, 29, 32, 33 };
+	for (uint i = 0; i < ARRAYSIZE(kReturnSet); i++)
+		if (number == kReturnSet[i] && _kind == kLocRoom && _location)
+			_returnLocation = _location;
 	if (loc.kind == kLocPopup)
 		return gotoPopup(number);
+	if (loc.kind == kLocKemSkab)
+		return gotoKemSkab();
+	if (loc.kind == kLocBordStol)
+		return gotoBordStol(number);
 	if (loc.kind != kLocRoom)
 		return false;
 	for (int e = 0; e < kMaxEntries; e++) {
@@ -139,7 +152,7 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	if (!_scene.load(loc, entry))
 		return false;
 	_location = number;
-	_popup = false;
+	_kind = kLocRoom;
 	_nextLocation = 0;
 	_pending = false;
 	_textTimer = 0;
@@ -167,7 +180,7 @@ void OlgaEngine::leaveRoom() {
 	// RoomLoc_Run (1000:02c6): Olga's place, without her animation offset,
 	// becomes entry 1 of the room she leaves
 	SceneObject *olga = _scene.olga();
-	if (!_popup && olga && olga->anim >= 1) {
+	if (_kind == kLocRoom && olga && olga->anim >= 1) {
 		const ScnAnim &a = olga->def.anims[olga->anim - 1];
 		_entries[_location - 1][0] = { (int16)(olga->x - a.dx), (int16)(olga->y - a.dy) };
 	}
@@ -223,22 +236,28 @@ Common::Error OlgaEngine::run() {
 		while (g_system->getEventManager()->pollEvent(e)) {
 			switch (e.type) {
 			case Common::EVENT_MOUSEMOVE:
-				if (_inputEnabled && !_popup)
+				if (_inputEnabled && _kind == kLocRoom)
 					onHover(e.mouse);
+				else if (_inputEnabled && _kind == kLocKemSkab)
+					kemHover(e.mouse);
 				break;
 			case Common::EVENT_LBUTTONDOWN:
 				if (!_inputEnabled)
 					break;
-				if (_popup) {
+				if (_kind == kLocPopup) {
 					int k = popupHitTest(e.mouse);
 					if (k)
 						popupAnswer(k);
+				} else if (_kind == kLocKemSkab) {
+					kemClick(e.mouse);
+				} else if (_kind == kLocBordStol) {
+					bordClick(e.mouse);
 				} else {
 					onClick(e.mouse);
 				}
 				break;
 			case Common::EVENT_KEYDOWN:
-				if (_inputEnabled && !_popup)
+				if (_inputEnabled && _kind == kLocRoom)
 					onKey(e.kbd);
 				break;
 			default:
@@ -248,11 +267,15 @@ Common::Error OlgaEngine::run() {
 		// One frame of the room view's idle method (Room_021e)
 		if (_textTimer > 0 && --_textTimer == 0)
 			clearText();
-		_scene.tick();
+		// BordStol has no scene: it draws on the screen once
+		if (_kind != kLocBordStol)
+			_scene.tick();
 		if (_nextLocation)
 			leaveRoom();
-		_scene.draw(_roomView);
-		_screen->blitFrom(_roomView, _popup ? Common::Point(4, 14) : Common::Point(0, kRoomTop));
+		if (_kind != kLocBordStol) {
+			_scene.draw(_roomView);
+			_screen->blitFrom(_roomView, _kind == kLocPopup ? Common::Point(4, 14) : Common::Point(0, kRoomTop));
+		}
 		_screen->update();
 		uint32 used = g_system->getMillis() - start;
 		if (used < kFrameMs)

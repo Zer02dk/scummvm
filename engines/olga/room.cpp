@@ -162,7 +162,9 @@ void OlgaEngine::startVerb() {
 void OlgaEngine::handleEvent(const SceneEvent &e) {
 	// Responses_RoomEvent (5427:1454): 3 = Olga arrived, the rest belong to
 	// the situations
-	if (e.code == kEventArrived) {
+	if (_kind == kLocKemSkab) {
+		kemEvent(e);
+	} else if (e.code == kEventArrived) {
 		if (_pending && e.object == _scene.olgaIndex()) {
 			_pending = false;
 			runVerb();

@@ -108,6 +108,19 @@ bool Scene::load(const LocationDef &loc, int entry) {
 	return true;
 }
 
+SceneObject &Scene::addObject(const ScnObject &def) {
+	SceneObject o;
+	o.animated = true;
+	o.def = def;
+	o.x = def.x;
+	o.y = def.y;
+	o.delay = def.delay;
+	o.last = def.start;
+	setAnim(o, 1);
+	_objects.push_back(o);
+	return _objects.back();
+}
+
 void Scene::switchAnim(SceneObject &obj, int n) {
 	// Scene_SwitchAnim + Scene_ApplyAnimOffset: leave the old animation's
 	// offset, take the new one's offset and depth bias, start at its first

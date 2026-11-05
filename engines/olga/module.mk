@@ -9,6 +9,7 @@ MODULE_OBJS = \
 	metaengine.o \
 	olga.o \
 	popup.o \
+	special.o \
 	room.o \
 	scene.o \
 	scn.o \

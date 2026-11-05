@@ -49,7 +49,7 @@ bool OlgaEngine::gotoPopup(int number) {
 	if (!_scene.load(loc, 0))
 		return false;
 	_location = number;
-	_popup = true;
+	_kind = kLocPopup;
 	_nextLocation = 0;
 	_pending = false;
 	_textTimer = 0;

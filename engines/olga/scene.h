@@ -117,6 +117,8 @@ public:
 		obj.x = x;
 		obj.y = y;
 	}
+	/** Scene1e9c_0000 + Scene_19bf: an object made in code (KemSkab), animation 1. */
+	SceneObject &addObject(const ScnObject &def);
 	/** Apply the requested animations at once (after the handlers' refresh). */
 	void settle();
 	void setListener(SceneListener *l) { _listener = l; }

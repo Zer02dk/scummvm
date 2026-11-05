@@ -111,8 +111,13 @@ private:
 	bool _pendingDevil = false;  // DS:2592: shown when the next room starts
 	bool _pendingPraise = false; // DS:2593
 
+	// The kind of the current location: a room, a pop-up or a special screen
+	LocationKind _kind = kLocRoom;
+	// RoomLoc_Run: a room left for a screen of the return set (1000:02a6)
+	// is kept in DS:2178; the screen goes back there, entry 1
+	int _returnLocation = 0;
+
 	// Pop-ups (location type kLocPopup, overlay 53cd)
-	bool _popup = false;
 	int _popupAnswers = 0;
 	LbmImage _answerImages[4];
 
@@ -120,6 +125,21 @@ private:
 	LbmImage _verbImages[kNumVerbs];
 	LbmImage _arrowImages[2];
 	LbmImage _icons[18];    // 1..17
+	LbmImage _okImage;      // 19c0:0db3
+
+	// KemSkab (overlay 52ee)
+	struct KemItem {
+		int id;
+		Common::Rect hot;   // room view coordinates, inclusive
+	};
+	Common::Array<KemItem> _kemItems; // in the order their controls were inserted
+	uint16 _kemChosen = 0;  // view +0xcae, set of 1..9
+	int _kemHover = 100;    // view +0xcac
+	// BordStol (overlay 502f)
+	LbmFile _bordLbm;
+	int _bordId = 0;        // +0x6ab: 225 or 226
+	int _bordChoice = 0;    // +0x6a7
+	int _bordBase = 0;      // +0x6a9: first picture - 1
 
 	/** Main_ShowPicture: a full-screen LBM with its palette, image 1 at 0,0. */
 	bool showPicture(const Common::Path &name);
@@ -196,6 +216,18 @@ private:
 	void drawPopup();
 	int popupHitTest(const Common::Point &p);
 	void popupAnswer(int choice);
+
+	// Special screens (special.cpp)
+	bool gotoKemSkab();
+	void kemPlace(int item, int pos);
+	void kemText(const Common::String &text, bool chosen);
+	int kemHitTest(const Common::Point &p) const;
+	void kemHover(const Common::Point &p);
+	void kemClick(const Common::Point &p);
+	void kemEvent(const SceneEvent &e);
+	bool gotoBordStol(int number);
+	void bordSelect(int choice);
+	void bordClick(const Common::Point &p);
 
 protected:
 	Common::Error run() override;
