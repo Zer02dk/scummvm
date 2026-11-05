@@ -141,7 +141,7 @@ void Scene::startScript(SceneObject &obj, int event) {
 	if (obj.moving)
 		loadMove(obj);
 	else if (event != 2)
-		_events.push_back({ event, (int)(&obj - _objects.begin()) });
+		post(event, (int)(&obj - _objects.begin()));
 }
 
 void Scene::stopScript(SceneObject &obj) {
@@ -168,7 +168,9 @@ static int roundDiv(int a, int b) {
 void Scene::scriptStep(SceneObject &obj, int index) {
 	// Scene_ScriptStep (1fab:11a8): when a move is used up, the next one, or
 	// after the last the event (1e9c:0111); while moving, Scene_MoveStep puts
-	// the object at start + RoundDiv(d * done, steps)
+	// the object at start + RoundDiv(d * done, steps). A handler that starts
+	// a new script from the event gets its first move step in this same step
+	// (Scene_11a8 tests +0x12c0 again after the event)
 	if (obj.stepsLeft == 0) {
 		if (obj.moveIndex < obj.moves.size()) {
 			obj.moveIndex++;
@@ -177,8 +179,9 @@ void Scene::scriptStep(SceneObject &obj, int index) {
 			obj.moving = false;
 			obj.moves.clear();
 			if (obj.event != 2)
-				_events.push_back({ obj.event, index });
-			return;
+				post(obj.event, index);
+			if (!obj.moving)
+				return;
 		}
 	}
 	if (obj.stepsLeft > 0 && obj.cur.steps > 0) {
@@ -204,12 +207,6 @@ void Scene::settle() {
 			o.pending = 0;
 		}
 	}
-}
-
-Common::Array<SceneEvent> Scene::takeEvents() {
-	Common::Array<SceneEvent> e = _events;
-	_events.clear();
-	return e;
 }
 
 int Scene::imageWidth(const SceneObject &obj) const {

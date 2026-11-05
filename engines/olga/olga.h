@@ -72,7 +72,7 @@ enum {
 // One frame of the original's loop: 4 ticks of its 100 Hz timer
 static const uint32 kFrameMs = 40;
 
-class OlgaEngine : public Engine {
+class OlgaEngine : public Engine, public SceneListener {
 private:
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
@@ -199,6 +199,8 @@ public:
 	Graphics::Screen *_screen = nullptr;
 
 	OlgaEngine(OSystem *syst, const ADGameDescription *gameDesc);
+	/** Room events, at once from the object's step (Gui_01d1). */
+	void sceneEvent(const SceneEvent &e) override { handleEvent(e); }
 	~OlgaEngine() override;
 
 	uint32 getFeatures() const;

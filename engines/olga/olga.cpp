@@ -39,6 +39,7 @@ OlgaEngine *g_engine;
 OlgaEngine::OlgaEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("Olga") {
 	g_engine = this;
+	_scene.setListener(this);
 	// ObjNames_InitStates (21b9:045a): the state at a new game
 	memset(_flags, 0, sizeof(_flags));
 	for (uint i = 0; i < ARRAYSIZE(kStates); i++)
@@ -246,9 +247,6 @@ Common::Error OlgaEngine::run() {
 		if (_textTimer > 0 && --_textTimer == 0)
 			clearText();
 		_scene.tick();
-		Common::Array<SceneEvent> events = _scene.takeEvents();
-		for (uint i = 0; i < events.size(); i++)
-			handleEvent(events[i]);
 		if (_nextLocation)
 			leaveRoom();
 		_scene.draw(_roomView);

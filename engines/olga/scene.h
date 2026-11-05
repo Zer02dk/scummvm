@@ -79,6 +79,17 @@ struct SceneEvent {
 	int object;
 };
 
+/**
+ * Receives the room events. Gui_01d1 calls the control's event method at
+ * once, so the event is handled inside the object's step, before its
+ * animation advances (a new script's animation replaces the advance).
+ */
+class SceneListener {
+public:
+	virtual ~SceneListener() {}
+	virtual void sceneEvent(const SceneEvent &e) = 0;
+};
+
 class Scene {
 public:
 	/** Room_Init: the room's pictures, Olga's sprite file, the SCN and the PRS. */
@@ -108,8 +119,7 @@ public:
 	}
 	/** Apply the requested animations at once (after the handlers' refresh). */
 	void settle();
-	/** Events posted since the last call. */
-	Common::Array<SceneEvent> takeEvents();
+	void setListener(SceneListener *l) { _listener = l; }
 
 	/** Olga's feet: centre x and the sort key (Responses_1a4d). */
 	Common::Point feet(const SceneObject &obj) const;
@@ -134,7 +144,11 @@ private:
 	Common::Array<SceneObject> _objects;
 	int _olga = -1;
 	int _counter = 0; // frames, mod 1000
-	Common::Array<SceneEvent> _events;
+	SceneListener *_listener = nullptr;
+	void post(int code, int object) {
+		if (_listener)
+			_listener->sceneEvent({ code, object });
+	}
 };
 
 } // End of namespace Olga
