@@ -42,6 +42,7 @@ OlgaEngine::OlgaEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engin
 	_scene.setListener(this);
 	// ObjNames_InitStates (21b9:045a): the state at a new game
 	memset(_flags, 0, sizeof(_flags));
+	memset(_controlOff, 0, sizeof(_controlOff));
 	for (uint i = 0; i < ARRAYSIZE(kStates); i++)
 		_flags[kStates[i].id] = kStates[i].flags;
 	for (int n = 0; n < kNumLocations; n++)
@@ -147,6 +148,7 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	setInput(true);
 	// Every hotspot's handler is attached and refreshed (method 1 -> 11):
 	// objects set their animation, cupboards show or hide their contents
+	memset(_controlOff, 0, sizeof(_controlOff));
 	for (uint i = 0; i < _scene.scn().objects.size(); i++)
 		refresh(_scene.scn().objects[i].hotspot.id);
 	for (uint i = 0; i < _scene.scn().hotspots.size(); i++)

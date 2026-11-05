@@ -81,6 +81,12 @@ void OlgaEngine::say(const Common::String &text, byte color, bool talk) {
 	_textTimer = text.size() * _textSpeed;
 }
 
+void OlgaEngine::showText(const Common::String &text, byte color) {
+	_screen->fillRect(Common::Rect(0, 0, 320, kRoomTop), 0);
+	_font.drawCentred(*_screen, text, 0, color);
+	_textTimer = 0;
+}
+
 void OlgaEngine::sayExe(uint16 seg, uint16 off, byte color, bool talk) {
 	say(_exe.readString(seg, off), color, talk);
 }
@@ -196,12 +202,7 @@ const ThingDef *OlgaEngine::thing(int id) const {
 
 bool OlgaEngine::hotspotOff(int id) const {
 	const ThingDef *t = thing(id);
-	// Controls the refreshes switch off: Lars with the group (1222:2a91),
-	// the bag boy in the classroom (26fb), the lifters done (4b48)
-	if ((id == 164 && (_flags[id] & 2)) || (id == 186 && (_flags[id] & 2)) ||
-		(id == 188 && (_flags[id] & 3) == 1))
-		return true;
-	return (_flags[id] & 0x100) || (t && t->pronounOff && (_flags[id] & 1));
+	return _controlOff[id] || (_flags[id] & 0x100) || (t && t->pronounOff && (_flags[id] & 1));
 }
 
 void OlgaEngine::addToInventory(int id) {

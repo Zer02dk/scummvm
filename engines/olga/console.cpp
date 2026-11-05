@@ -26,6 +26,30 @@ namespace Olga {
 
 Console::Console() : GUI::Debugger() {
 	registerCmd("room", WRAP_METHOD(Console, Cmd_room));
+	registerCmd("flag", WRAP_METHOD(Console, Cmd_flag));
+	registerCmd("give", WRAP_METHOD(Console, Cmd_give));
+}
+
+bool Console::Cmd_flag(int argc, const char **argv) {
+	int id = argc > 1 ? atoi(argv[1]) : 0;
+	if (id <= kNoObject || id > kLastId) {
+		debugPrintf("Usage: flag <id 101..231> [value]\n");
+		return true;
+	}
+	if (argc > 2)
+		g_engine->setFlag(id, strtoul(argv[2], nullptr, 0));
+	debugPrintf("S[%d] = 0x%x\n", id, g_engine->getFlag(id));
+	return true;
+}
+
+bool Console::Cmd_give(int argc, const char **argv) {
+	int id = argc > 1 ? atoi(argv[1]) : 0;
+	if (id <= kNoObject || id > kLastId) {
+		debugPrintf("Usage: give <id 101..231>\n");
+		return true;
+	}
+	g_engine->giveThing(id);
+	return true;
 }
 
 Console::~Console() {

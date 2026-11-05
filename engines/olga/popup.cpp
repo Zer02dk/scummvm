@@ -53,6 +53,7 @@ bool OlgaEngine::gotoPopup(int number) {
 	_nextLocation = 0;
 	_pending = false;
 	_textTimer = 0;
+	memset(_controlOff, 0, sizeof(_controlOff));
 	for (uint i = 0; i < _scene.scn().objects.size(); i++)
 		refresh(_scene.scn().objects[i].hotspot.id);
 	_scene.settle();

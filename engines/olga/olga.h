@@ -89,6 +89,7 @@ private:
 	uint32 _flags[kLastId + 1];
 	Common::Array<int> _inventory;
 	Common::String _names[kLastId + 1]; // a name a refresh wrote, or empty
+	bool _controlOff[kLastId + 1];      // hotspots a refresh switched off (control +0x20)
 	int _inventoryRow = 1;  // InvPanel +0x1df
 
 	// The sentence (room view +0xcad..+0xcb5)
@@ -153,12 +154,16 @@ private:
 	void say(const Common::String &text, byte color = 0xe, bool talk = true);
 	void sayExe(uint16 seg, uint16 off, byte color = 0xe, bool talk = true);
 	void clearText();
+	/** Room_1632 (method +0x38): the message line, no timer, Olga does not talk. */
+	void showText(const Common::String &text, byte color);
 	void verbBase(int verb);
 	/** Things (notes/verbs.md): Tag, Brug / Giv on the home, Se på. */
 	bool verbThing(int id, int verb, int other);
 	const ThingDef *thing(int id) const;
 	/** Thing_Refresh's "control off": carried (bit 0), or bit 0x100. */
 	bool hotspotOff(int id) const;
+	/** The control's method +0x20: a refresh switches the hotspot on or off. */
+	void setControl(int id, bool on) { _controlOff[id] = !on; }
 	void addToInventory(int id);
 	void removeFromInventory(int id);
 	void verbDoor(int id, int verb);
@@ -217,6 +222,12 @@ public:
 	/** Load a room location (1..34) with Olga at the given entry. */
 	bool gotoLocation(int number, int entry);
 	int getLocation() const { return _location; }
+
+	// Debugger (console.cpp)
+	uint32 getFlag(int id) const { return _flags[id]; }
+	void setFlag(int id, uint32 value) { _flags[id] = value; refresh(id); }
+	/** Thing_Tag without the walk: carried and in the inventory. */
+	void giveThing(int id) { _flags[id] |= 1; refresh(id); addToInventory(id); }
 };
 
 extern OlgaEngine *g_engine;
