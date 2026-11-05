@@ -36,6 +36,12 @@ public:
 	 * Used by e.g. the launcher to determine whether to enable the Load button.
 	 */
 	bool hasFeature(MetaEngineFeature f) const override;
+
+	/** The save / load screen has 16 slots (SaveLoad_0ef2). */
+	int getMaximumSaveSlot() const override { return 16; }
+
+	/** From the save screen: the room it was opened from. */
+	void getSavegameThumbnail(Graphics::Surface &thumb) override;
 };
 
 #endif // OLGA_METAENGINE_H

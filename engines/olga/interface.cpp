@@ -260,9 +260,15 @@ void OlgaEngine::onKey(const Common::KeyState &ks) {
 		cancelWalk();
 		return;
 	}
-	// Responses_087d: F4 SkiftTid (11), F5 the status, F10 the quit menu
-	// (27); F2 / F3 save and load are not done yet
+	// Responses_087d: F2 save (25), F3 load (26), F4 SkiftTid (11), F5 the
+	// status, F10 the quit menu (27)
 	switch (ks.keycode) {
+	case Common::KEYCODE_F2:
+		setExit(25, 1);
+		return;
+	case Common::KEYCODE_F3:
+		setExit(26, 1);
+		return;
 	case Common::KEYCODE_F4:
 		setExit(11, 1);
 		return;

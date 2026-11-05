@@ -88,6 +88,9 @@ bool OlgaEngine::loadExeData() {
 	for (int k = 0; k < 4; k++)
 		if (!_exe.readBitmap(0x19c0, 0x0005 + 0x200 * k, _speedImages[k]))
 			return false;
+	if (!_exe.readBitmap(0x19c0, 0x0a27, _diskImages[0]) || !_exe.readBitmap(0x19c0, 0x0bed, _diskImages[1]) ||
+		!_exe.readBitmap(0x19c0, 0x2421, _yesImage) || !_exe.readBitmap(0x19c0, 0x263a, _noImage))
+		return false;
 	if (!_exe.readBitmap(0x19c0, 0x1fdd, _quitImages[0]) || !_exe.readBitmap(0x19c0, 0x21ff, _quitImages[1]) ||
 		!_exe.readBitmap(0x19c0, 0x0805, _quitImages[2]))
 		return false;
@@ -167,6 +170,8 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 		return gotoQuitMenu();
 	if (loc.kind == kLocGameEnd)
 		return gotoGameEnd();
+	if (loc.kind == kLocSaveLoad)
+		return gotoSaveLoad(number);
 	if (loc.kind != kLocRoom)
 		return false;
 	for (int e = 0; e < kMaxEntries; e++) {
@@ -204,9 +209,14 @@ void OlgaEngine::leaveRoom() {
 	// RoomLoc_Run (1000:02c6): Olga's place, without her animation offset,
 	// becomes entry 1 of the room she leaves
 	SceneObject *olga = _scene.olga();
-	if (_kind == kLocRoom && olga && olga->anim >= 1) {
+	if (_kind == kLocRoom && _location > 0 && olga && olga->anim >= 1) {
 		const ScnAnim &a = olga->def.anims[olga->anim - 1];
 		_entries[_location - 1][0] = { (int16)(olga->x - a.dx), (int16)(olga->y - a.dy) };
+	}
+	// A loaded save: Olga's saved place becomes its room's entry 1
+	if (_restoreLocation) {
+		_entries[_restoreLocation - 1][0] = _restoreEntry;
+		_restoreLocation = 0;
 	}
 	int loc = _nextLocation, entry = _nextEntry;
 	_nextLocation = 0;
@@ -251,8 +261,13 @@ Common::Error OlgaEngine::run() {
 
 	// Main_NewGame: location 9 (GANG5), entry 3
 	_roomView.create(kRoomWidth, kRoomHeight, Graphics::PixelFormat::createFormatCLUT8());
-	if (!shouldQuit() && !gotoLocation(kStartLocation, kStartEntry))
+	// or a save chosen in the launcher
+	int launcherSlot = ConfMan.hasKey("save_slot") ? ConfMan.getInt("save_slot") : -1;
+	if (launcherSlot >= 0 && loadGameState(launcherSlot).getCode() == Common::kNoError) {
+		leaveRoom();
+	} else if (!shouldQuit() && !gotoLocation(kStartLocation, kStartEntry)) {
 		return Common::kReadingFailed;
+	}
 
 	while (!shouldQuit()) {
 		uint32 start = g_system->getMillis();
@@ -280,6 +295,8 @@ Common::Error OlgaEngine::run() {
 					textSpeedClick(e.mouse);
 				} else if (_kind == kLocQuitMenu) {
 					quitMenuClick(e.mouse);
+				} else if (_kind == kLocSaveLoad) {
+					saveLoadClick(e.mouse);
 				} else if (_kind == kLocRoom) {
 					onClick(e.mouse);
 				}
@@ -289,6 +306,8 @@ Common::Error OlgaEngine::run() {
 					gameEndDone(); // GameEnd_02a9: any key
 				else if (_inputEnabled && _kind == kLocRoom)
 					onKey(e.kbd);
+				else if (_inputEnabled && _kind == kLocSaveLoad)
+					saveLoadKey(e.kbd);
 				else if (_inputEnabled && (_kind == kLocTextSpeed || _kind == kLocQuitMenu) &&
 						 e.kbd.keycode == Common::KEYCODE_ESCAPE)
 					// Not in the original (SkiftTid_04f8 only ends the text, the
@@ -304,12 +323,12 @@ Common::Error OlgaEngine::run() {
 			clearText();
 		// BordStol and the quit menu have no scene: they draw on the screen
 		// once
-		bool scene = _kind != kLocBordStol && _kind != kLocQuitMenu;
+		bool scene = _kind != kLocBordStol && _kind != kLocQuitMenu && _kind != kLocSaveLoad;
 		if (scene)
 			_scene.tick();
 		if (_nextLocation)
 			leaveRoom();
-		scene = _kind != kLocBordStol && _kind != kLocQuitMenu;
+		scene = _kind != kLocBordStol && _kind != kLocQuitMenu && _kind != kLocSaveLoad;
 		if (scene) {
 			_scene.draw(_roomView);
 			_screen->blitFrom(_roomView, roomViewPos());

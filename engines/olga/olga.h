@@ -128,6 +128,26 @@ private:
 	LbmImage _okImage;      // 19c0:0db3
 	LbmImage _speedImages[4]; // Kort, Mellem, Lang, OK
 	LbmImage _quitImages[3];  // Afslut, Forfra, Fortsæt
+	LbmImage _diskImages[2];  // a drive: off, selected
+	LbmImage _yesImage, _noImage;
+
+	// Save / load (saves.cpp)
+	struct SlotInfo {
+		bool used;
+		Common::String name; // CP865
+	};
+	SlotInfo _slots[17];
+	bool _slSave = false;     // view +0x2e7
+	bool _slEditing = false;  // +0x497
+	int _slSlot = 0;          // +0x498
+	Common::String _slText;   // +0x49a
+	int _slDialog = 0;        // 1 the overwrite question, 2 an error
+	int _dialogX = 0, _dialogW = 0;
+	Common::String _saveName; // the name written into the record
+	Graphics::ManagedSurface _roomPicture; // the screen when F2 / F3 opened
+	byte _roomPalette[256 * 3];
+	int _restoreLocation = 0; // a loaded save: its room and Olga's place
+	Entry _restoreEntry = { 0, 0 };
 
 	// KemSkab (overlay 52ee)
 	struct KemItem {
@@ -240,6 +260,20 @@ private:
 	/** Where the current location's room view is on the screen. */
 	Common::Point roomViewPos() const;
 
+	void writeRecord(Common::WriteStream &out, const Common::String &name, int location, int x, int y);
+	bool readRecord(Common::SeekableReadStream &in);
+	bool gotoSaveLoad(int number);
+	void frame3D(int x, int y, int w, int h);
+	void drawSlot(int n, bool selected, const Common::String &text);
+	void drawSlots();
+	void drawEditSlot();
+	void drawDialog(const Common::String &title, const Common::String &text, bool question);
+	void saveLoadDone();
+	void saveLoadError(uint16 off);
+	void saveSlot();
+	void saveLoadClick(const Common::Point &p);
+	void saveLoadKey(const Common::KeyState &ks);
+
 	/** Main_NewGame's state: ObjNames_InitStates, empty inventory. */
 	void resetGame();
 	/** The handlers' method 12 summed over 100..231 (20 = all solved). */
@@ -268,8 +302,18 @@ public:
 	}
 
 	bool hasFeature(EngineFeature f) const override {
-		return f == kSupportsReturnToLauncher;
+		return f == kSupportsReturnToLauncher || f == kSupportsLoadingDuringRuntime ||
+			f == kSupportsSavingDuringRuntime;
 	}
+
+	// Save games (saves.cpp)
+	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
+	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
+	Common::Error saveGameState(int slot, const Common::String &desc, bool isAutosave = false) override;
+	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
+	/** The save's thumbnail: the room the save screen was opened from. */
+	bool getRoomThumbnail(Graphics::Surface &thumb);
 
 	/** Load a room location (1..34) with Olga at the given entry. */
 	bool gotoLocation(int number, int entry);

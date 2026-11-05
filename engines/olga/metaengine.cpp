@@ -33,8 +33,17 @@ Common::Error OlgaMetaEngine::createInstance(OSystem *syst, Engine **engine, con
 }
 
 bool OlgaMetaEngine::hasFeature(MetaEngineFeature f) const {
-	// No save games yet
-	return false;
+	// Save games (saves.cpp) in the extended format: description, thumbnail,
+	// date and play time are added by Engine::saveGameState
+	return f == kSavesUseExtendedFormat || f == kSupportsListSaves || f == kSupportsDeleteSave ||
+		f == kSavesSupportMetaInfo || f == kSavesSupportThumbnail || f == kSavesSupportCreationDate ||
+		f == kSavesSupportPlayTime || f == kSupportsLoadingDuringStartup || f == kSimpleSavesNames;
+}
+
+void OlgaMetaEngine::getSavegameThumbnail(Graphics::Surface &thumb) {
+	if (Olga::g_engine && Olga::g_engine->getRoomThumbnail(thumb))
+		return;
+	MetaEngine::getSavegameThumbnail(thumb);
 }
 
 #if PLUGIN_ENABLED_DYNAMIC(OLGA)

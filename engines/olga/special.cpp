@@ -352,14 +352,6 @@ const int kSpeeds[3] = { 3, 6, 9 };
 // QuitMenu_0209: Afslut (10), Forfra (11), Fortsæt (12) at x 33
 const int kQuitY[3] = { 0x3d, 0x4f, 0x61 };
 
-void frame3D(Graphics::Screen &s, int x, int y, int w, int h) {
-	// Frame3D_Draw (1212:0000)
-	s.frameRect(Common::Rect(x, y, x + w, y + h), 8);
-	s.frameRect(Common::Rect(x + 1, y + 1, x + w + 1, y + h + 1), 15);
-	s.setPixel(x + 1, y + h - 1, 7);
-	s.setPixel(x + w - 1, y + 1, 7);
-}
-
 } // End of anonymous namespace
 
 bool OlgaEngine::gotoTextSpeed() {
@@ -388,7 +380,7 @@ bool OlgaEngine::gotoTextSpeed() {
 	// SkiftTid_0142 (Room_Init clears the screen first)
 	_screen->clear(0);
 	_screen->fillRect(Common::Rect(0x30, 8, 0x10f, 200), 7);
-	frame3D(*_screen, 0x31, 9, 0xdc, 0xbd);
+	frame3D(0x31, 9, 0xdc, 0xbd);
 	_screen->hLine(0x33, 0x24, 0x10b, 8);
 	_screen->hLine(0x33, 0x25, 0x10b, 15);
 	_screen->frameRect(Common::Rect(0x5d, 0x28, 0xe1, 0x9e), 0);
@@ -433,7 +425,7 @@ bool OlgaEngine::gotoQuitMenu() {
 	_textTimer = 0;
 	_screen->frameRect(Common::Rect(0x15, 0x20, 0x12b, 0x77), 0);
 	_screen->fillRect(Common::Rect(0x16, 0x21, 0x12a, 0x76), 7);
-	frame3D(*_screen, 0x17, 0x22, 0x111, 0x52);
+	frame3D(0x17, 0x22, 0x111, 0x52);
 	_screen->hLine(0x18, 0x34, 0x127, 8);
 	_screen->hLine(0x18, 0x35, 0x127, 15);
 	_font.drawCentred(*_screen, _exe.readString(0x50a7, 0x0281), 0x29, 1);
