@@ -119,6 +119,11 @@ void MiljostrupEngine::showImage(uint number, int palette) {
 	delete image;
 }
 
+void MiljostrupEngine::showDebugPicture(uint number, int x, int y) {
+	_debugPicture = number;
+	_debugPicturePos = Common::Point(x, y);
+}
+
 void MiljostrupEngine::drawInterface() {
 	// As drawn by the original (unit ae72): black strips around the room, a
 	// white line, the grey bar with the message area on the left and a 3x2
@@ -329,6 +334,14 @@ void MiljostrupEngine::runRoomLoop() {
 			_canSaveNow = false;
 			if (!got || _loadedGame)
 				break;
+			if (_debugPicture && (e.type == Common::EVENT_LBUTTONDOWN || e.type == Common::EVENT_KEYDOWN)) {
+				// Console "pic": a click or key takes it away; the bar may
+				// have been drawn over
+				_debugPicture = 0;
+				drawInterface();
+				_interface->draw();
+				continue;
+			}
 			if (_award.active || _inputOff)
 				continue; // input is off until the award has been shown (or a room turned it off)
 			if (e.type == Common::EVENT_MOUSEMOVE) {
@@ -436,6 +449,13 @@ void MiljostrupEngine::runRoomLoop() {
 			_interface->cancelSecondObject(); // ae72:09df
 		}
 		_scene->draw(_screen);
+		if (_debugPicture) {
+			Graphics::ManagedSurface *image = _archive.loadImage(_debugPicture);
+			if (image) {
+				_screen->transBlitFrom(*image, _debugPicturePos, image->getTransparentColor());
+				delete image;
+			}
+		}
 
 		limiter.delayBeforeSwap();
 		_screen->update();

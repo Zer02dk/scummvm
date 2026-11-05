@@ -574,6 +574,22 @@ void Scene::setFigureState(uint16 object, int state) {
 	}
 }
 
+void Scene::debugSetState(uint index, int state) {
+	Figure &fig = _figures[index];
+	fig.queue.clear();
+	fig.route.clear();
+	fig.moving = false;
+	fig.visible = true;
+	setState(fig, state);
+}
+
+void Scene::debugWalk(uint index, int state, int dx, int dy, int steps) {
+	Figure &fig = _figures[index];
+	WalkCommand cmd = { state, dx, dy, MAX(steps, 1) };
+	fig.visible = true;
+	fig.queue.push_back(cmd);
+}
+
 void Scene::setFigureVisible(uint16 object, bool visible) {
 	for (uint i = 0; i < _figures.size(); ++i) {
 		if (_figures[i].info->object == object)

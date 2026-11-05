@@ -34,6 +34,8 @@ private:
 	bool Cmd_door(int argc, const char **argv);
 	bool Cmd_items(int argc, const char **argv);
 	bool Cmd_points(int argc, const char **argv);
+	bool Cmd_figure(int argc, const char **argv);
+	bool Cmd_pic(int argc, const char **argv);
 public:
 	Console();
 	~Console() override;

@@ -21,6 +21,7 @@
 
 #include "miljostrup/console.h"
 #include "miljostrup/miljostrup.h"
+#include "miljostrup/scene.h"
 
 namespace Miljostrup {
 
@@ -30,6 +31,8 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("door",   WRAP_METHOD(Console, Cmd_door));
 	registerCmd("items",  WRAP_METHOD(Console, Cmd_items));
 	registerCmd("points", WRAP_METHOD(Console, Cmd_points));
+	registerCmd("figure", WRAP_METHOD(Console, Cmd_figure));
+	registerCmd("pic",    WRAP_METHOD(Console, Cmd_pic));
 }
 
 Console::~Console() {
@@ -84,6 +87,62 @@ bool Console::Cmd_items(int argc, const char **argv) {
 	g_engine->giveAllItems();
 	debugPrintf("All items of location %d are in the inventory\n", g_engine->getLocation());
 	return true;
+}
+
+bool Console::Cmd_figure(int argc, const char **argv) {
+	// Viewing aid: play any state of a room figure, also the ones the
+	// original never selects (the father's 2..4, notes/formats.md)
+	Scene *scene = g_engine->getScene();
+	if (!scene || !scene->getRoom()) {
+		debugPrintf("No room\n");
+		return true;
+	}
+	const RoomInfo *room = scene->getRoom();
+	if (argc < 2) {
+		for (uint i = 0; i < scene->getFigureCount(); ++i) {
+			const Figure &fig = scene->getFigureAt(i);
+			debugPrintf("#%d object %d%s: state %d at (%d,%d)%s\n", i, fig.info->object,
+				fig.info->player ? " (player)" : "", fig.state, fig.x, fig.y, fig.visible ? "" : " hidden");
+			for (int k = 0; k < fig.info->frameCount; ++k) {
+				const FigureFrame &f = getFigureFrame(*fig.info, k);
+				uint len = getSequenceLength(room, f.sequence);
+				Common::String images;
+				for (uint n = 0; n < len; ++n)
+					images += Common::String::format(" %d", getSequenceImage(room, f.sequence, n));
+				debugPrintf("    state %d: sequence %d, offset (%d,%d), images%s\n", f.state, f.sequence,
+					f.dx, f.dy, images.c_str());
+			}
+		}
+		debugPrintf("Usage: figure <#> <state>, or figure <#> walk <state> <dx> <dy> <steps>\n");
+		return true;
+	}
+	uint index = atoi(argv[1]);
+	if (index >= scene->getFigureCount()) {
+		debugPrintf("No figure #%s\n", argv[1]);
+		return true;
+	}
+	if (argc == 3) {
+		scene->debugSetState(index, atoi(argv[2]));
+		return false;
+	}
+	if (argc == 7 && !strcmp(argv[2], "walk")) {
+		scene->debugWalk(index, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]));
+		return false;
+	}
+	debugPrintf("Usage: figure <#> <state>, or figure <#> walk <state> <dx> <dy> <steps>\n");
+	return true;
+}
+
+bool Console::Cmd_pic(int argc, const char **argv) {
+	// Viewing aid: an archive picture over the room until the next click or key
+	if (argc < 2 || argc == 3) {
+		debugPrintf("Usage: pic <1..1512> [x y] (screen coordinates, default 0 8)\n");
+		return true;
+	}
+	int x = argc > 3 ? atoi(argv[2]) : 0;
+	int y = argc > 3 ? atoi(argv[3]) : 8;
+	g_engine->showDebugPicture(atoi(argv[1]), x, y);
+	return false;
 }
 
 } // End of namespace Miljostrup

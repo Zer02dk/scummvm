@@ -135,6 +135,14 @@ public:
 	/** updateObject for every bound figure that is not walking (room rebuilt). */
 	void refreshFigures();
 
+	// Debugging (console "figure"): the room's figures by index
+	uint getFigureCount() const { return _figures.size(); }
+	const Figure &getFigureAt(uint index) const { return _figures[index]; }
+	/** The figure's state from the next animation step on; its walks are dropped. */
+	void debugSetState(uint index, int state);
+	/** Queue a walk for the figure, as queueFigureWalk does by object. */
+	void debugWalk(uint index, int state, int dx, int dy, int steps);
+
 private:
 	Graphics::ManagedSurface *getImage(uint16 number);
 	void freeImages();

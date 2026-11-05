@@ -208,6 +208,12 @@ public:
 	int getPoints() const { return _score[0]; }
 	void setPoints(int points) { _score[0] = points; }
 	int getRoom() const { return _room; }
+	Scene *getScene() const { return _scene; }
+	/**
+	 * Debugging (console "pic"): an archive picture drawn over the room at
+	 * (x, y) until the next click or key; 0 = none.
+	 */
+	void showDebugPicture(uint number, int x, int y);
 
 	/** Start a location: reset its doors. */
 	void enterLocation(int location);
@@ -336,6 +342,8 @@ public:
 	/** Room VMT 0x24 (2395:02ec): input off with the hourglass. */
 	void setInputOff(bool off);
 	bool _inputOff = false;
+	uint _debugPicture = 0;
+	Common::Point _debugPicturePos;
 	// Save games (saves.cpp)
 	bool _canSaveNow = false;  // set only around the room loop's pollEvent
 	bool _loadedGame = false;  // a save was loaded: build its room
