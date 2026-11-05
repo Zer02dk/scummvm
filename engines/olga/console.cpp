@@ -30,6 +30,13 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("give", WRAP_METHOD(Console, Cmd_give));
 	registerCmd("score", WRAP_METHOD(Console, Cmd_score));
 	registerCmd("solve", WRAP_METHOD(Console, Cmd_solve));
+	registerCmd("points", WRAP_METHOD(Console, Cmd_points));
+}
+
+bool Console::Cmd_points(int argc, const char **argv) {
+	// ok = solved, -- = not yet, -1 = a penalty that counts now
+	debugPrintf("%s", g_engine->scoreReport().c_str());
+	return true;
 }
 
 bool Console::Cmd_score(int argc, const char **argv) {

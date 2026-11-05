@@ -207,6 +207,15 @@ bool OlgaEngine::gotoLocation(int number, int entry) {
 	return true;
 }
 
+void OlgaEngine::exitGame() {
+	// The exit procedure (1000:1901, installed by Main_Body): with a mouse,
+	// rultekst.lbm (the credits) for 32 s or a key, the mouse hidden
+	CursorMan.showMouse(false);
+	if (showPicture("RULTEKST.LBM"))
+		waitOrKey(32000);
+	quitGame();
+}
+
 void OlgaEngine::leaveRoom() {
 	// RoomLoc_Run (1000:02c6): Olga's place, without her animation offset,
 	// becomes entry 1 of the room she leaves
@@ -227,7 +236,7 @@ void OlgaEngine::leaveRoom() {
 		// is never reached), 32 s or a key, then the game ends
 		if (showPicture(loc == 100 ? "POLITI.LBM" : "FAERDIG.LBM"))
 			waitOrKey(32000);
-		quitGame();
+		exitGame();
 		return;
 	}
 	if (!gotoLocation(loc, entry))

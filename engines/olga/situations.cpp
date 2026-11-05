@@ -123,32 +123,88 @@ void OlgaEngine::setInput(bool enabled) {
 	setCursor(enabled ? 0x134e : 0x138e);
 }
 
+namespace {
+
+// Method 12 of every handler (1222:0963 .. 66b0, notes/situations.md): +1
+// for each solved situation, -1 for the five penalties
+enum ScoreTest {
+	kMasked,  // (state & mask) == value
+	kNonZero, // the wall in GANG6: any picture
+	kWord     // the state word itself (219, 220, 224, 225, 226)
+};
+
+const struct {
+	int id;
+	ScoreTest test;
+	uint32 mask, value;
+	int points;
+	const char *what;
+} kScores[] = {
+	{ 104, kMasked, 4, 4, 1, "KLASSEN: the boy at the radiator" },
+	{ 108, kMasked, 1, 1, 1, "KLASSEN: the blackboard lamp" },
+	{ 205, kMasked, 1, 1, 1, "KLASSEN: the reading girl's light" },
+	{ 127, kMasked, 1, 1, 1, "FORMNING: the light" },
+	{ 202, kMasked, 4, 4, 1, "FORMNING: the girl (window, markers)" },
+	{ 140, kNonZero, 0, 0, 1, "GANG6: a picture on the ugly wall" },
+	{ 128, kMasked, 2, 2, 1, "GANG6: the bag of poison disposed of" },
+	{ 164, kMasked, 2, 2, 1, "GAARD: Lars with the others" },
+	{ 186, kMasked, 6, 2, 1, "GANG1: the boy's school bag (TASKVALG)" },
+	{ 171, kMasked, 7, 3, 1, "VILLA / HAVE: the paper boy and the dog" },
+	{ 174, kMasked, 1, 1, 1, "ENTRE: the sister's music (VOLUME)" },
+	{ 185, kMasked, 1, 1, 1, "SLOEJD: the paint cupboard (KemSkab)" },
+	{ 188, kMasked, 3, 1, 1, "KOEKKEN: the boys lifting (LOEFT)" },
+	{ 192, kMasked, 2, 2, 1, "HKOEKKEN: the salmiak disposed of" },
+	{ 200, kMasked, 1, 1, 1, "SLOEJD: the alkyd paint in the bucket" },
+	{ 217, kMasked, 2, 2, 1, "KLASSE2: the wet jacket on the hooks" },
+	{ 218, kMasked, 2, 2, 1, "KLASSE2: the wet coat on the hooks" },
+	{ 219, kWord, 0, 0, 1, "KLASSE2: the noisy class (megafon)" },
+	{ 220, kWord, 0, 0, 0, nullptr },
+	{ 224, kWord, 0, 0, 0, nullptr },
+	{ 225, kWord, 0, 0, 1, "KLASSE2: pupil 225's table and chair" },
+	{ 226, kWord, 0, 0, 1, "KLASSE2: pupil 226's table and chair" },
+	{ 102, kMasked, 1, 1, -1, "KLASSEN: the window is open" },
+	{ 126, kMasked, 1, 1, -1, "FORMNING: the window is open" },
+	{ 173, kMasked, 2, 2, -1, "the loudspeaker is in the GARAGE" },
+	{ 197, kMasked, 1, 1, -1, "the bucket is still carried" },
+	{ 201, kMasked, 1, 1, -1, "SLOEJD: the akryl paint is in the bucket" }
+};
+
+} // End of anonymous namespace
+
+int OlgaEngine::scoreOf(uint i) const {
+	uint32 f = _flags[kScores[i].id];
+	switch (kScores[i].test) {
+	case kNonZero:
+		return f != 0 ? kScores[i].points : 0;
+	case kWord:
+		return (int16)(f & 0xffff);
+	default:
+		return (f & kScores[i].mask) == kScores[i].value ? kScores[i].points : 0;
+	}
+}
+
 int OlgaEngine::score() const {
-	// Method 12 of every handler (1222:0963 .. 66b0, notes/situations.md):
-	// +1 for each solved situation, -1 for the five penalties; 219, 220,
-	// 224, 225 and 226 return their state word
-	static const struct {
-		int id;
-		uint32 mask, value;
-		int points;
-	} kScores[] = {
-		{ 104, 4, 4, 1 }, { 108, 1, 1, 1 }, { 205, 1, 1, 1 }, { 127, 1, 1, 1 },
-		{ 202, 4, 4, 1 }, { 128, 2, 2, 1 }, { 164, 2, 2, 1 }, { 186, 6, 2, 1 },
-		{ 171, 7, 3, 1 }, { 174, 1, 1, 1 }, { 185, 1, 1, 1 }, { 188, 3, 1, 1 },
-		{ 192, 2, 2, 1 }, { 200, 1, 1, 1 }, { 217, 2, 2, 1 }, { 218, 2, 2, 1 },
-		{ 102, 1, 1, -1 }, { 126, 1, 1, -1 }, { 173, 2, 2, -1 }, { 197, 1, 1, -1 },
-		{ 201, 1, 1, -1 }
-	};
 	int total = 0;
 	for (uint i = 0; i < ARRAYSIZE(kScores); i++)
-		if ((_flags[kScores[i].id] & kScores[i].mask) == kScores[i].value)
-			total += kScores[i].points;
-	if (_flags[140] != 0) // the wall in GANG6: any picture
-		total++;
-	static const int kRaw[] = { kIdKids2, kIdKids2b, kIdPupils, kIdPupil1, kIdPupil2 };
-	for (uint i = 0; i < ARRAYSIZE(kRaw); i++)
-		total += (int16)(_flags[kRaw[i]] & 0xffff);
+		total += scoreOf(i);
 	return total;
+}
+
+Common::String OlgaEngine::scoreReport() const {
+	// For the debugger: every situation and penalty with its points now
+	Common::String out;
+	for (uint i = 0; i < ARRAYSIZE(kScores); i++) {
+		int n = scoreOf(i);
+		if (!kScores[i].what) {
+			if (n)
+				out += Common::String::format("  %+d  %d (state %d, normally 0)\n", n, kScores[i].id, n);
+			continue;
+		}
+		const char *mark = kScores[i].points > 0 ? (n > 0 ? "ok" : "--") : (n < 0 ? "-1" : "  ");
+		out += Common::String::format("  %s  %3d  %s\n", mark, kScores[i].id, kScores[i].what);
+	}
+	out += Common::String::format("Score %d of 20\n", score());
+	return out;
 }
 
 void OlgaEngine::showStatus() {

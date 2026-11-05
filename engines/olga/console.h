@@ -33,6 +33,7 @@ private:
 	bool Cmd_give(int argc, const char **argv);
 	bool Cmd_score(int argc, const char **argv);
 	bool Cmd_solve(int argc, const char **argv);
+	bool Cmd_points(int argc, const char **argv);
 public:
 	Console();
 	~Console() override;

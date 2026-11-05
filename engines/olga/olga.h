@@ -291,10 +291,14 @@ private:
 	bool initSound();
 	void playSound(SoundEffect effect);
 
+	/** The credits (rultekst.lbm), then the game quits. */
+	void exitGame();
+
 	/** Main_NewGame's state: ObjNames_InitStates, empty inventory. */
 	void resetGame();
 	/** The handlers' method 12 summed over 100..231 (20 = all solved). */
 	int score() const;
+	int scoreOf(uint i) const;
 	/** F5, Responses_0590. */
 	void showStatus();
 	/** Situations_54d6: the ENTRE front door 194. */
@@ -339,6 +343,8 @@ public:
 	// Debugger (console.cpp)
 	uint32 getFlag(int id) const { return _flags[id]; }
 	int getScore() const { return score(); }
+	/** One line per situation and penalty, for the debugger's points. */
+	Common::String scoreReport() const;
 	void setFlag(int id, uint32 value) { _flags[id] = value; refresh(id); }
 	/** Thing_Tag without the walk: carried and in the inventory. */
 	void giveThing(int id) { _flags[id] |= 1; refresh(id); addToInventory(id); }

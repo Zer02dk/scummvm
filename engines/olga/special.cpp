@@ -448,7 +448,7 @@ void OlgaEngine::quitMenuClick(const Common::Point &p) {
 		if (!buttonArea(_quitImages[k], Common::Point(0x21, kQuitY[k]), 1).contains(p))
 			continue;
 		if (k == 0) {
-			quitGame();
+			exitGame();
 		} else if (k == 1) {
 			// Main_NewGame: GANG5, entry 3
 			resetGame();
@@ -498,7 +498,7 @@ bool OlgaEngine::gotoGameEnd() {
 
 void OlgaEngine::gameEndDone() {
 	// GameEnd_0264: any room event or key: SetExit(0), the game ends
-	quitGame();
+	exitGame();
 }
 
 } // End of namespace Olga
