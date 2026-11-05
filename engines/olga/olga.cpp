@@ -19,6 +19,7 @@
  *
  */
 
+#include "audio/softsynth/pcspk.h"
 #include "common/config-manager.h"
 #include "common/debug-channels.h"
 #include "common/events.h"
@@ -62,6 +63,7 @@ void OlgaEngine::resetGame() {
 }
 
 OlgaEngine::~OlgaEngine() {
+	delete _speaker;
 	delete _screen;
 }
 
@@ -238,6 +240,8 @@ Common::Error OlgaEngine::run() {
 	setDebugger(new Console());
 	if (!loadExeData())
 		return Common::kReadingFailed;
+	if (!initSound())
+		warning("Olga: no PC speaker");
 
 	// Main_Body: the hourglass, two title pictures of 6 s each (1000:198b,
 	// 1000:1994)

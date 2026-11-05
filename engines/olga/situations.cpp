@@ -46,7 +46,7 @@ enum {
 
 // Handler classes (VMTs, tools/situations.py)
 enum {
-	kVmtWindow = 0x0356, kVmtRadiator = 0x0442, kVmtBoy = 0x031e,
+	kVmtWindow = 0x0356, kVmtRadiator = 0x0442, kVmtBoy = 0x031e, kVmtTrunks = 0x04ea,
 	kVmtCeilingLamp = 0x0a9e, kVmtBlackboard = 0x0986, kVmtGirl = 0x09be,
 	kVmtLamp = 0x0ad6, kVmtDevil = 0x047a, kVmtPraise = 0x04b2,
 	// FORMNING
@@ -351,6 +351,7 @@ bool OlgaEngine::refreshSituation(int id, SceneObject &o) {
 			setInput(false);
 			_flags[kIdGate] ^= 1;
 			refresh(kIdGate);
+			playSound(kSoundDoor);
 		} else {
 			Scene::setAnim(o, s + 1);
 			setControl(id, s == 0 || s == 1 || s == 4);
@@ -541,7 +542,8 @@ void OlgaEngine::situationEvent(const SceneEvent &e) {
 		break;
 	case kEventDevilLaugh:
 		// Responses_0d44: laughs (animation 4, 2 steps) until the count runs
-		// out, then leaves (animation 5, 10 steps)
+		// out, then leaves (animation 5, 10 steps); a beep each time
+		playSound(kSoundDevil);
 		if (devil) {
 			if (--_devilCount == 0) {
 				devil->moves.push_back(move(5, 10));
@@ -575,6 +577,7 @@ void OlgaEngine::situationEvent(const SceneEvent &e) {
 		refresh(kIdBagBoy);
 		_flags[kIdClassDoor] ^= 1;
 		refresh(kIdClassDoor);
+		playSound(kSoundDoor);
 		setInput(true);
 		break;
 	case kEventLiftingDone:
@@ -586,6 +589,7 @@ void OlgaEngine::situationEvent(const SceneEvent &e) {
 		_flags[kIdKitchenDoorSchool] ^= 1;
 		refresh(kIdKitchenDoorSchool);
 		showPraise();
+		playSound(kSoundDoor);
 		break;
 	case kEventLarsWalks: {
 		// Responses_107b: Lars walks 168 pixels right in 56 steps
@@ -801,6 +805,27 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 			return false;
 		}
 		return true;
+	case kVmtTrunks:
+		// 1222:01c7 (Giv; Brug, Tag, Se på are the thing's): giving the
+		// badebukser to the boy 104 is wrong unless he is cold or just
+		// right (00fd: he puts them on, bit 0, the devil)
+		if (verb != kVerbGiv || other != kIdBoy)
+			return false;
+		if (!(f & 1)) {
+			sayExe(kSeg, 0x0179);
+		} else if (_flags[kIdBoy] & 2) {
+			sayExe(kSeg, 0x018a);
+		} else if (_flags[kIdBoy] & 4) {
+			sayExe(kSeg, 0x01a6);
+		} else {
+			_flags[kIdBoy] |= 1;
+			removeFromInventory(id);
+			if (olga)
+				Scene::setAnim(*olga, 1);
+			refresh(kIdBoy);
+			showDevil();
+		}
+		return true;
 	case kVmtBoy:
 		// 1222:0352 / 04a5: cold (bit 1), just right (bit 2), warm (bit 0)
 		if (verb == kVerbSePaa) {
@@ -983,6 +1008,7 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 			} else {
 				situationEvent({ kEventOwnerShouts, -1 });
 			}
+			playSound(kSoundDoor);
 			return true;
 		}
 		if (verb == kVerbGiv && id == 128 && (other == kIdSister || other == 209)) {
@@ -999,6 +1025,7 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 			refresh(id);
 			if (olga)
 				Scene::setAnim(*olga, 1);
+			playSound(other == kIdBucket ? kSoundClick : kSoundDoor);
 			sayExe(kSeg, 0x362e);
 			if (other == kIdFarvehDoor) {
 				_flags[kIdFarvehDoor] ^= 1;
@@ -1013,6 +1040,7 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 			if (_flags[kIdKitchenDoor] == 1) {
 				_flags[kIdKitchenDoor] = 0;
 				refresh(kIdKitchenDoor);
+				playSound(kSoundDoor);
 			}
 			showDevil();
 		} else {
@@ -1142,6 +1170,7 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 					olga->moves.push_back(move(7, _textSpeed * 0x24 / 3));
 					_scene.startScript(*olga, kEventOwnerTakesDog);
 				}
+				playSound(kSoundDoor);
 				SceneObject *owner = _scene.findObject(id);
 				if (owner)
 					Scene::setAnim(*owner, 2);
@@ -1279,6 +1308,7 @@ bool OlgaEngine::verbSituation(int id, int verb, int other) {
 		if ((verb == kVerbBrug || verb == kVerbGiv) && other == kIdBucket) {
 			f |= 1;
 			refresh(id);
+			playSound(kSoundClick);
 			if (id == kIdAlkyd) {
 				showPraise();
 				_flags[kIdPaintGirl] |= 1;

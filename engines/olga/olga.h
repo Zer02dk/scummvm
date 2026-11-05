@@ -40,7 +40,18 @@
 #include "olga/scene.h"
 #include "olga/states.h"
 
+namespace Audio {
+class PCSpeaker;
+}
+
 namespace Olga {
+
+/** The three PC-speaker effects (unit Speaker 1c46). */
+enum SoundEffect {
+	kSoundClick, // Speaker_0045: into the bucket, the KemSkab bin's lid
+	kSoundDoor,  // Speaker_0068: doors, the gate, disposal
+	kSoundDevil  // Speaker_008b: the devil laughs
+};
 
 // Screen layout of a room (notes/interface.md)
 enum {
@@ -130,6 +141,8 @@ private:
 	LbmImage _quitImages[3];  // Afslut, Forfra, Fortsæt
 	LbmImage _diskImages[2];  // a drive: off, selected
 	LbmImage _yesImage, _noImage;
+
+	Audio::PCSpeaker *_speaker = nullptr;
 
 	// Save / load (saves.cpp)
 	struct SlotInfo {
@@ -273,6 +286,10 @@ private:
 	void saveSlot();
 	void saveLoadClick(const Common::Point &p);
 	void saveLoadKey(const Common::KeyState &ks);
+
+	// Sound (sound.cpp)
+	bool initSound();
+	void playSound(SoundEffect effect);
 
 	/** Main_NewGame's state: ObjNames_InitStates, empty inventory. */
 	void resetGame();

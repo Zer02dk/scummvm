@@ -15,6 +15,7 @@ MODULE_OBJS = \
 	scene.o \
 	scn.o \
 	situations.o \
+	sound.o \
 	walk.o
 
 # This module can be built as a plugin

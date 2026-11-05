@@ -227,6 +227,7 @@ void OlgaEngine::kemClick(const Common::Point &p) {
 			bin->moves.push_back(m);
 			_scene.startScript(*bin, kEventLidDown);
 		}
+		playSound(kSoundClick);
 	} else if (id == kCmdOk) {
 		// KemSkab_0b4b: right iff the set is exactly the dangerous ones
 		if (_kemChosen == kKemRight) {
@@ -247,6 +248,7 @@ void OlgaEngine::kemEvent(const SceneEvent &e) {
 	SceneObject *bin = _scene.findObject(kIdBin);
 	if (bin)
 		Scene::setAnim(*bin, 1);
+	playSound(kSoundClick);
 	setInput(true);
 }
 

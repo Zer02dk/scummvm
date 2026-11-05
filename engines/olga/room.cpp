@@ -342,8 +342,10 @@ void OlgaEngine::verbDoor(int id, int verb) {
 		} else if (open) {
 			sayExe(kSegSituations, kTextAlreadyOpen);
 		} else {
+			// Situations_1008: opened, a sound
 			_flags[id] |= 1;
 			refresh(id);
+			playSound(kSoundDoor);
 		}
 		break;
 	case kVerbLuk:
@@ -352,8 +354,10 @@ void OlgaEngine::verbDoor(int id, int verb) {
 		} else if (!open) {
 			sayExe(kSegSituations, kTextAlreadyClosed);
 		} else {
+			// Situations_10c0: closed, a sound
 			_flags[id] &= ~1;
 			refresh(id);
+			playSound(kSoundDoor);
 		}
 		break;
 	case kVerbSePaa:
